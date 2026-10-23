@@ -1,0 +1,422 @@
+/* ==========================================================================
+   eMilap Lost & Found AI Chatbot Styles
+   Mocha palette matching the dark aesthetic (#0E0805, #231713, #6F4E37)
+   ========================================================================== */
+
+.emilap-bot-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 45;
+  transition: opacity 280ms cubic-bezier(0.4, 0, 0.2, 1), transform 280ms cubic-bezier(0.4, 0, 0.2, 1), visibility 280ms;
+}
+
+.emilap-bot-container.is-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(12px) scale(0.95);
+}
+
+/* ── Floating Launcher Button ── */
+.emilap-bot-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px 10px 12px;
+  border: 1px solid rgba(229, 228, 226, 0.18);
+  border-radius: 999px;
+  background: rgba(35, 23, 19, 0.92);
+  color: #FAF9F8;
+  box-shadow: 0 10px 32px rgba(12, 7, 5, 0.55), 0 0 0 1px rgba(111, 78, 55, 0.25);
+  backdrop-filter: blur(16px);
+  cursor: pointer;
+  transition: transform 220ms ease, background-color 220ms ease, border-color 220ms ease, box-shadow 220ms ease;
+  user-select: none;
+}
+
+.emilap-bot-trigger:hover {
+  transform: translateY(-2px);
+  background: rgba(45, 28, 23, 0.96);
+  border-color: rgba(230, 224, 240, 0.35);
+  box-shadow: 0 14px 40px rgba(12, 7, 5, 0.7), 0 0 16px rgba(111, 78, 55, 0.35);
+}
+
+.emilap-bot-trigger.is-active {
+  background: #6F4E37;
+  border-color: #E6E0F0;
+  box-shadow: 0 8px 28px rgba(111, 78, 55, 0.6);
+}
+
+.emilap-bot-icon-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6F4E37, #3D261E);
+  color: #FAF9F8;
+  border: 1px solid rgba(230, 224, 240, 0.25);
+}
+
+.emilap-bot-badge-dot {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #10B981;
+  border: 2px solid #231713;
+}
+
+.emilap-bot-trigger-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #E5E4E2;
+}
+
+/* ── Popup Chat Window ── */
+.emilap-chat-window {
+  position: fixed;
+  bottom: 84px;
+  right: 24px;
+  z-index: 50;
+  width: min(390px, calc(100vw - 32px));
+  height: min(580px, calc(100vh - 120px));
+  display: flex;
+  flex-direction: column;
+  background: rgba(22, 13, 10, 0.95);
+  border: 1px solid rgba(229, 228, 226, 0.16);
+  border-radius: 24px;
+  box-shadow: 0 24px 64px rgba(10, 5, 3, 0.75), 0 0 0 1px rgba(111, 78, 55, 0.2);
+  backdrop-filter: blur(28px);
+  overflow: hidden;
+  overscroll-behavior: contain;
+  animation: emilapChatPop 260ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes emilapChatPop {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ── Header ── */
+.emilap-chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(229, 228, 226, 0.1);
+  background: rgba(35, 23, 19, 0.85);
+}
+
+.emilap-chat-header-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.emilap-chat-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #6F4E37;
+  color: #FAF9F8;
+  border: 1px solid rgba(230, 224, 240, 0.3);
+}
+
+.emilap-chat-title {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #FAF9F8;
+  line-height: 1.2;
+}
+
+.emilap-chat-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 0;
+  font-size: 0.7rem;
+  color: rgba(229, 228, 226, 0.65);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.emilap-chat-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10B981;
+  display: inline-block;
+}
+
+.emilap-chat-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: rgba(229, 228, 226, 0.6);
+  cursor: pointer;
+  transition: background 180ms ease, color 180ms ease;
+}
+
+.emilap-chat-close-btn:hover {
+  background: rgba(229, 228, 226, 0.1);
+  color: #FAF9F8;
+}
+
+/* ── Message Area ── */
+.emilap-chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 16px 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.emilap-message {
+  display: flex;
+  flex-direction: column;
+  max-width: 86%;
+  animation: msgFadeIn 220ms ease forwards;
+}
+
+@keyframes msgFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.emilap-message-bot {
+  align-self: flex-start;
+}
+
+.emilap-message-user {
+  align-self: flex-end;
+}
+
+.emilap-message-bubble {
+  padding: 12px 14px;
+  border-radius: 18px;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  white-space: pre-line;
+  word-break: break-word;
+}
+
+.emilap-message-bot .emilap-message-bubble {
+  background: rgba(44, 28, 22, 0.85);
+  border: 1px solid rgba(229, 228, 226, 0.12);
+  color: #E5E4E2;
+  border-bottom-left-radius: 6px;
+}
+
+.emilap-message-user .emilap-message-bubble {
+  background: #6F4E37;
+  color: #FAF9F8;
+  border-bottom-right-radius: 6px;
+  box-shadow: 0 4px 14px rgba(111, 78, 55, 0.35);
+}
+
+.emilap-bold-text {
+  font-weight: 700;
+  color: #FAF9F8;
+}
+
+.emilap-message-time {
+  margin-top: 4px;
+  font-size: 0.68rem;
+  color: rgba(229, 228, 226, 0.45);
+  padding: 0 4px;
+}
+
+.emilap-message-user .emilap-message-time {
+  align-self: flex-end;
+}
+
+/* ── Suggested Navigation Button inside Bot Message ── */
+.emilap-chat-action-btn {
+  margin-top: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 1px solid #E6E0F0;
+  border-radius: 999px;
+  background: rgba(230, 224, 240, 0.1);
+  color: #FAF9F8;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 180ms ease, border-color 180ms ease, transform 180ms ease;
+}
+
+.emilap-chat-action-btn:hover {
+  background: rgba(230, 224, 240, 0.22);
+  border-color: #FAF9F8;
+  transform: translateY(-1px);
+}
+
+/* ── Quick Query Pills (matching reference screenshot) ── */
+.emilap-quick-queries {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+  width: 100%;
+}
+
+.emilap-quick-btn {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  text-align: left;
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid rgba(229, 228, 226, 0.22);
+  border-radius: 12px;
+  background: rgba(35, 23, 19, 0.75);
+  color: #FAF9F8;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 180ms ease;
+}
+
+.emilap-quick-btn:hover {
+  border-color: rgba(230, 224, 240, 0.6);
+  background: rgba(61, 38, 30, 0.85);
+  color: #FAF9F8;
+  transform: translateY(-1px);
+}
+
+/* ── Typing Indicator ── */
+.emilap-typing-bubble {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: rgba(44, 28, 22, 0.85);
+  border: 1px solid rgba(229, 228, 226, 0.12);
+  width: fit-content;
+  border-bottom-left-radius: 4px;
+}
+
+.emilap-typing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(229, 228, 226, 0.65);
+  animation: emilapBounce 1.2s infinite ease-in-out;
+}
+
+.emilap-typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.emilap-typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes emilapBounce {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+/* ── Input Box & Footer ── */
+.emilap-chat-input-bar {
+  padding: 12px 14px;
+  border-top: 1px solid rgba(229, 228, 226, 0.1);
+  background: rgba(30, 19, 15, 0.95);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.emilap-chat-input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid rgba(229, 228, 226, 0.18);
+  border-radius: 14px;
+  background: rgba(18, 11, 8, 0.9);
+  color: #FAF9F8;
+  font-size: 0.88rem;
+  outline: none;
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.emilap-chat-input:focus {
+  border-color: #E6E0F0;
+  box-shadow: 0 0 0 2px rgba(230, 224, 240, 0.15);
+}
+
+.emilap-chat-input::placeholder {
+  color: rgba(229, 228, 226, 0.45);
+}
+
+.emilap-chat-send-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 12px;
+  background: #6F4E37;
+  color: #FAF9F8;
+  cursor: pointer;
+  transition: background 180ms ease, transform 180ms ease;
+  flex-shrink: 0;
+}
+
+.emilap-chat-send-btn:hover:not(:disabled) {
+  background: #8C5E43;
+  transform: translateY(-1px);
+}
+
+.emilap-chat-send-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Mobile responsiveness ── */
+@media (max-width: 700px) {
+  .emilap-bot-container {
+    bottom: 18px;
+    right: 16px;
+  }
+
+  .emilap-chat-window {
+    bottom: 76px;
+    right: 14px;
+    left: 14px;
+    width: auto;
+    height: min(520px, calc(100vh - 100px));
+  }
+
+  .emilap-bot-trigger-label {
+    display: none; /* Icon-only floating bubble on mobile */
+  }
+
+  .emilap-bot-trigger {
+    padding: 8px;
+  }
+}
+

@@ -1,6 +1,6 @@
 const FloatingPanel = ({ title, children, className = '', right = false, center = false }) => (
   <section
-    className={`pointer-events-auto min-w-0 rounded-2xl border border-[#E5E4E2]/15 bg-[#1B110C]/85 p-6 md:p-8 backdrop-blur-xl shadow-2xl shadow-black/45 ${
+    className={`min-w-0 rounded-2xl border border-[#E5E4E2]/15 bg-[#1B110C]/85 p-6 md:p-8 backdrop-blur-xl shadow-2xl shadow-black/45 ${
       right ? 'ml-auto' : ''
     } ${center ? 'mx-auto' : ''} ${className}`}
   >

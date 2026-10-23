@@ -295,10 +295,51 @@
 
 @media (max-width: 700px) {
   .hm-steps { grid-template-columns: 1fr; gap: 16px; }
-  .hm-section-progress { right: 14px; }
-  .hm-section-rail { margin-top: 14px; }
-  .hm-section-dots { gap: 15px; }
-  .hm-section-active-label { right: calc(100% + 14px); font-size: 0.58rem; letter-spacing: 0.1em; }
+
+  /* ---- Mobile section gallery: vertical stacked list ---- */
+  /* Remove the pinned-horizontal behaviour entirely */
+  .hm-gallery {
+    height: auto;
+    overflow: visible;
+  }
+
+  /* Track becomes a vertical flex column */
+  .hm-track {
+    flex-direction: column;
+    width: 100%;
+    height: auto;
+    gap: 16px;
+    padding: 0 20px 40px;
+    transform: none !important; /* block GSAP from translating on mobile */
+  }
+
+  /* Intro block sits above the cards */
+  .hm-gallery-intro {
+    width: 100%;
+    padding: 36px 0 16px;
+  }
+  .hm-gallery-intro h2 {
+    font-size: clamp(2.8rem, 16vw, 5rem);
+  }
+
+  /* Each card takes full width and a fixed sensible height */
+  .hm-card {
+    width: 100%;
+    height: 260px;
+  }
+
+  .hm-card-title {
+    font-size: 1.45rem;
+  }
+
+  /* End spacer not needed vertically */
+  .hm-track-end { display: none; }
+
+  /* Hide the horizontal progress bar */
+  .hm-progress { display: none; }
+
+  /* Hide the fixed side progress rail on mobile */
+  .hm-section-progress { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .hm-marquee > div { animation: none; }
