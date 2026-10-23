@@ -18,14 +18,14 @@ const DESC = {
 };
 
 const SECTION_IMAGES = {
-  report_lost: '/images/Report_lost.jpg',
-  report_found: '/images/Report_found.jpg',
-  browse: '/images/Campus_listings.jpg',
-  matches: '/images/Possible_matches.jpg',
-  claims: '/images/Ownership_claims.jpg',
-  notifications: '/images/Updates.jpg',
-  admin: '/images/Moderation.jpg',
-  settings: '/images/Account-settings.jpg',
+  report_lost: '/images/Report_lost.webp',
+  report_found: '/images/Report_found.webp',
+  browse: '/images/Campus_listings.webp',
+  matches: '/images/Possible_matches.webp',
+  claims: '/images/Ownership_claims.webp',
+  notifications: '/images/Updates.webp',
+  admin: '/images/Moderation.webp',
+  settings: '/images/Account-settings.webp',
 };
 
 const STEPS = [
@@ -34,7 +34,7 @@ const STEPS = [
   ['03', 'Claim', 'Owners confirm with private details before anything is returned.'],
 ];
 
-export default function HomePage({ items, onSelect, restoreSection = null }) {
+export default function HomePage({ items, onSelect, restoreSection = null, onSliderChange }) {
   const rootRef = useRef(null);
   const galleryRef = useRef(null);
   const trackRef = useRef(null);
@@ -58,12 +58,19 @@ export default function HomePage({ items, onSelect, restoreSection = null }) {
     gsap.ticker.add(tick);
     gsap.ticker.lagSmoothing(0);
 
+    // On mobile we skip the horizontal pin — cards are displayed vertically via CSS.
+    const isMobile = window.matchMedia('(max-width: 700px)').matches;
+
     const ctx = gsap.context(() => {
       gsap.from('.hm-char', { yPercent: 115, duration: 1, ease: 'power4.out', stagger: 0.06 });
       gsap.from('.hm-fade', { y: 24, opacity: 0, duration: 0.8, ease: 'power3.out', stagger: 0.1, delay: 0.35 });
 
       const track = trackRef.current;
       const distance = () => Math.max(0, track.scrollWidth - window.innerWidth);
+
+      // Skip horizontal pin on mobile — vertical CSS layout handles it
+      if (isMobile) return;
+
       const tween = gsap.to(track, {
         x: () => -distance(),
         ease: 'none',
@@ -74,10 +81,22 @@ export default function HomePage({ items, onSelect, restoreSection = null }) {
           start: 'top top',
           end: () => `+=${distance()}`,
           invalidateOnRefresh: true,
-          onEnter: () => setShowSectionProgress(true),
-          onEnterBack: () => setShowSectionProgress(true),
-          onLeave: () => setShowSectionProgress(false),
-          onLeaveBack: () => setShowSectionProgress(false),
+          onEnter: () => {
+            setShowSectionProgress(true);
+            onSliderChange?.(true);
+          },
+          onEnterBack: () => {
+            setShowSectionProgress(true);
+            onSliderChange?.(true);
+          },
+          onLeave: () => {
+            setShowSectionProgress(false);
+            onSliderChange?.(false);
+          },
+          onLeaveBack: () => {
+            setShowSectionProgress(false);
+            onSliderChange?.(false);
+          },
           onUpdate: (self) => {
             const progress = self.progress;
             const index = Math.round(progress * Math.max(0, sections.length - 1));
@@ -125,10 +144,12 @@ export default function HomePage({ items, onSelect, restoreSection = null }) {
         setActiveIndex(restoreSection.index);
         activeIndexRef.current = restoreSection.index;
         setShowSectionProgress(true);
+        onSliderChange?.(true);
       }
     }, rootRef);
 
     return () => {
+      onSliderChange?.(false);
       ctx.revert();
       gsap.ticker.remove(tick);
       gsap.ticker.lagSmoothing(500, 33);
@@ -202,7 +223,18 @@ export default function HomePage({ items, onSelect, restoreSection = null }) {
               }}
               onClick={() => onSelect(item.id, { index: i })}
             >
-              <img className="hm-card-image" src={SECTION_IMAGES[item.id]} alt="" loading="lazy" />
+              <img
+                className="hm-card-image"
+                src={SECTION_IMAGES[item.id]}
+                alt=""
+                loading="lazy"
+                decoding="async"
+                onError={(e) => {
+                  if (e.currentTarget.src.endsWith('.webp')) {
+                    e.currentTarget.src = SECTION_IMAGES[item.id].replace('.webp', '.jpg');
+                  }
+                }}
+              />
               <span className="hm-card-meta"><span>{String(i + 1).padStart(2, '0')}</span><span>Open →</span></span>
               <span className="hm-card-title">{item.label}</span>
               <span className="hm-card-desc">{DESC[item.label] ?? 'Use eMilap to report, find, and return items on campus.'}</span>

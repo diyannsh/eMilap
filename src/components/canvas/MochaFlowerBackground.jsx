@@ -1,14 +1,14 @@
 import './MochaFlowerBackground.css';
 
 const SECTIONS = [
-  { id: 'report_lost', src: '/images/Report_lost.jpg', alt: 'Report Lost' },
-  { id: 'report_found', src: '/images/Report_found.jpg', alt: 'Report Found' },
-  { id: 'browse', src: '/images/Campus_listings.jpg', alt: 'Campus Listings' },
-  { id: 'matches', src: '/images/Possible_matches.jpg', alt: 'Possible Matches' },
-  { id: 'claims', src: '/images/Ownership_claims.jpg', alt: 'Ownership Claims' },
-  { id: 'notifications', src: '/images/Updates.jpg', alt: 'Updates' },
-  { id: 'admin', src: '/images/Moderation.jpg', alt: 'Moderation' },
-  { id: 'settings', src: '/images/Account-settings.jpg', alt: 'Account Settings' },
+  { id: 'report_lost', src: '/images/Report_lost.webp', alt: 'Report Lost' },
+  { id: 'report_found', src: '/images/Report_found.webp', alt: 'Report Found' },
+  { id: 'browse', src: '/images/Campus_listings.webp', alt: 'Campus Listings' },
+  { id: 'matches', src: '/images/Possible_matches.webp', alt: 'Possible Matches' },
+  { id: 'claims', src: '/images/Ownership_claims.webp', alt: 'Ownership Claims' },
+  { id: 'notifications', src: '/images/Updates.webp', alt: 'Updates' },
+  { id: 'admin', src: '/images/Moderation.webp', alt: 'Moderation' },
+  { id: 'settings', src: '/images/Account-settings.webp', alt: 'Account Settings' },
 ];
 
 export default function MochaFlowerBackground({ activeView = 'dashboard' }) {
@@ -22,11 +22,16 @@ export default function MochaFlowerBackground({ activeView = 'dashboard' }) {
       {/* Home Screen: Botanical Flower Artwork seamlessly blended into the dark backdrop */}
       <div className={`mocha-flower-visual-stage ${isHome ? 'is-active' : ''}`}>
         <img
-          src="/images/hero-flower.jpg"
+          src="/images/hero-flower.webp"
           alt=""
           className="mocha-flower-img"
           loading="eager"
           decoding="async"
+          onError={(e) => {
+            if (e.currentTarget.src.endsWith('.webp')) {
+              e.currentTarget.src = '/images/hero-flower.jpg';
+            }
+          }}
         />
         <div className="mocha-flower-mask-wash" />
       </div>
@@ -45,6 +50,11 @@ export default function MochaFlowerBackground({ activeView = 'dashboard' }) {
               className="mocha-section-img"
               loading="lazy"
               decoding="async"
+              onError={(e) => {
+                if (e.currentTarget.src.endsWith('.webp')) {
+                  e.currentTarget.src = section.src.replace('.webp', '.jpg');
+                }
+              }}
             />
             <div className="mocha-section-overlay" />
           </div>
