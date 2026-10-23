@@ -18,25 +18,34 @@ export default function App() {
   const busy = useRef(false);
   const queuedView = useRef(null);
   const goRef = useRef(null);
-  const homeScrollY = useRef(0);
+  const lastSectionRef = useRef({ id: null, index: -1, fromHero: false });
 
   // Page change: a curtain wipes up over the screen, the view swaps underneath, then it wipes away.
-  const go = (id, { fromHistory = false } = {}) => {
+  const go = (id, maybeOpts = {}) => {
+    let options = {};
+    if (typeof maybeOpts === 'object' && maybeOpts !== null) {
+      options = maybeOpts;
+    }
+    const { fromHistory = false, index, fromHero = false, fromFooter = false } = options;
+
     if (busy.current) return;
     if (id === activeView) return;
     if (id !== 'dashboard' && !navigationItems.some((item) => item.id === id)) return;
 
+    if (id !== 'dashboard') {
+      const sectionItems = navigationItems.filter((item) => item.id !== 'dashboard');
+      const targetIndex = index !== undefined ? index : sectionItems.findIndex((item) => item.id === id);
+      lastSectionRef.current = {
+        id,
+        index: targetIndex >= 0 ? targetIndex : 0,
+        fromHero: Boolean(fromHero),
+      };
+    } else if (fromHero) {
+      lastSectionRef.current = { id: 'dashboard', index: -1, fromHero: true };
+    }
+
     if (!fromHistory) {
       const currentState = window.history.state ?? {};
-      if (id === 'dashboard' && currentState.__emilap) {
-        window.history.back();
-        return;
-      }
-
-      if (activeView === 'dashboard' && id !== 'dashboard') {
-        homeScrollY.current = window.scrollY;
-      }
-
       const nextState = { ...currentState, __emilap: true, __emilapView: id };
       if (activeView === 'dashboard' && id !== 'dashboard') {
         window.history.pushState(nextState, '');
@@ -47,22 +56,23 @@ export default function App() {
 
     busy.current = true;
     const c = curtain.current;
-    gsap.timeline({ onComplete: () => {
-      busy.current = false;
-      if (queuedView.current) {
-        const queued = queuedView.current;
-        queuedView.current = null;
-        goRef.current?.(queued, { fromHistory: true });
-      }
-    } })
+    gsap.timeline({
+      onComplete: () => {
+        busy.current = false;
+        if (queuedView.current) {
+          const queued = queuedView.current;
+          queuedView.current = null;
+          goRef.current?.(queued, { fromHistory: true });
+        }
+      },
+    })
       .set(c, { display: 'block', scaleY: 0, transformOrigin: '50% 100%' })
       .to(c, { scaleY: 1, duration: 0.38, ease: 'power3.inOut' })
       .add(() => {
         setActiveView(id);
-        window.scrollTo(0, 0);
       })
       .set(c, { transformOrigin: '50% 0%' })
-      .to(c, { scaleY: 0, duration: 0.45, ease: 'power3.inOut', delay: 0.1 })
+      .to(c, { scaleY: 0, duration: 0.45, ease: 'power3.inOut', delay: 0.08 })
       .set(c, { display: 'none' });
   };
   goRef.current = go;
@@ -104,13 +114,23 @@ export default function App() {
   return (
     <AppShell activeView={activeView} navigationItems={navigationItems} onNavigate={go}>
       {activeView === 'dashboard' ? (
-        <HomePage items={navigationItems} onSelect={go} restoreScrollY={homeScrollY.current} />
+        <HomePage
+          items={navigationItems}
+          onSelect={go}
+          restoreSection={lastSectionRef.current}
+        />
       ) : (
         <SectionPage title={sectionTitle} sectionIndex={Math.max(0, sectionIndex)}>
           {views[activeView] ?? <EmptyPlaceholder title={sectionTitle} />}
         </SectionPage>
       )}
-      <div ref={curtain} className="page-curtain" aria-hidden="true" />
+
+      <div
+        ref={curtain}
+        className="page-curtain"
+        style={{ display: 'none' }}
+        aria-hidden="true"
+      />
     </AppShell>
   );
 }

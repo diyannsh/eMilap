@@ -34,7 +34,7 @@ const STEPS = [
   ['03', 'Claim', 'Owners confirm with private details before anything is returned.'],
 ];
 
-export default function HomePage({ items, onSelect, restoreScrollY = 0 }) {
+export default function HomePage({ items, onSelect, restoreSection = null }) {
   const rootRef = useRef(null);
   const galleryRef = useRef(null);
   const trackRef = useRef(null);
@@ -44,10 +44,11 @@ export default function HomePage({ items, onSelect, restoreScrollY = 0 }) {
   const progressFillRef = useRef(null);
   const progressThumbRef = useRef(null);
   const progressLabelRef = useRef(null);
-  const activeIndexRef = useRef(0);
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [showSectionProgress, setShowSectionProgress] = useState(false);
+
   const sections = items.filter((item) => item.id !== 'dashboard');
+  const [activeIndex, setActiveIndex] = useState(0);
+  const activeIndexRef = useRef(0);
+  const [showSectionProgress, setShowSectionProgress] = useState(false);
 
   useLayoutEffect(() => {
     const lenis = new Lenis({ smoothWheel: true, lerp: 0.1 });
@@ -69,7 +70,7 @@ export default function HomePage({ items, onSelect, restoreScrollY = 0 }) {
         scrollTrigger: {
           trigger: galleryRef.current,
           pin: true,
-          scrub: 0.6,
+          scrub: true,
           start: 'top top',
           end: () => `+=${distance()}`,
           invalidateOnRefresh: true,
@@ -93,11 +94,40 @@ export default function HomePage({ items, onSelect, restoreScrollY = 0 }) {
       });
       stRef.current = tween.scrollTrigger;
       ScrollTrigger.refresh();
-      const restoreY = Math.max(0, restoreScrollY);
-      window.scrollTo(0, restoreY);
-      lenis.scrollTo(restoreY, { immediate: true, force: true });
-      ScrollTrigger.update();
+
+      // SYNCHRONOUS PRE-PAINT POSITION RESTORATION:
+      // If returning to a section slide, restore scroll and track transform BEFORE browser paints!
+      if (restoreSection && typeof restoreSection.index === 'number' && restoreSection.index >= 0 && !restoreSection.fromHero) {
+        const total = Math.max(1, sections.length - 1);
+        const progress = Math.min(1, Math.max(0, restoreSection.index / total));
+        const totalDist = distance();
+        const st = tween.scrollTrigger;
+        const targetScroll = Math.round(st.start + totalDist * progress);
+
+        // 1. Instantly apply track transform so there is zero layout jump or flicker
+        track.style.transform = `translate3d(${-totalDist * progress}px, 0px, 0px)`;
+        tween.progress(progress);
+
+        // 2. Instantly scroll window and Lenis
+        window.scrollTo({ top: targetScroll, left: 0, behavior: 'instant' });
+        lenis.scrollTo(targetScroll, { immediate: true, force: true });
+
+        // 3. Sync ScrollTrigger state immediately with zero lag
+        st.scroll(targetScroll);
+        st.progress = progress;
+        ScrollTrigger.update();
+
+        // 4. Update visual indicators
+        const step = window.matchMedia('(max-width: 700px)').matches ? 23 : 28;
+        if (barRef.current) barRef.current.style.transform = `scaleX(${progress})`;
+        if (progressFillRef.current) progressFillRef.current.style.transform = `translateX(-50%) scaleY(${progress})`;
+        if (progressThumbRef.current) progressThumbRef.current.style.transform = `translateY(${progress * (sections.length - 1) * step}px)`;
+        setActiveIndex(restoreSection.index);
+        activeIndexRef.current = restoreSection.index;
+        setShowSectionProgress(true);
+      }
     }, rootRef);
+
     return () => {
       ctx.revert();
       gsap.ticker.remove(tick);
@@ -106,7 +136,7 @@ export default function HomePage({ items, onSelect, restoreScrollY = 0 }) {
       lenisRef.current = null;
       stRef.current = null;
     };
-  }, []);
+  }, [restoreSection]);
 
   const scrollToSections = () => {
     const top = stRef.current?.start ?? 0;
@@ -129,8 +159,12 @@ export default function HomePage({ items, onSelect, restoreScrollY = 0 }) {
           matches, and confirm ownership with private details, all in one place.
         </p>
         <div className="hm-cta hm-fade">
-          <button type="button" className="hm-btn hm-btn-solid" onClick={() => onSelect('report_lost')}>Report a lost item</button>
-          <button type="button" className="hm-btn" onClick={scrollToSections}>Explore sections ↓</button>
+          <button type="button" className="hm-btn hm-btn-solid" onClick={() => onSelect('report_lost', { fromHero: true })}>
+            Report a lost item
+          </button>
+          <button type="button" className="hm-btn" onClick={scrollToSections}>
+            Explore sections ↓
+          </button>
         </div>
         <ol className="hm-steps hm-fade">
           {STEPS.map(([n, t, d]) => (
@@ -143,7 +177,14 @@ export default function HomePage({ items, onSelect, restoreScrollY = 0 }) {
         <div>{[0, 1].map((i) => <span key={i}>{'REPORT — MATCH — CLAIM — RETURN — '.repeat(4)}</span>)}</div>
       </div>
 
-      <section className="hm-gallery" ref={galleryRef} id="sections">
+      <section
+        className="hm-gallery"
+        ref={galleryRef}
+        id="sections"
+        onScroll={(e) => {
+          e.currentTarget.scrollLeft = 0;
+        }}
+      >
         <div className="hm-track" ref={trackRef}>
           <div className="hm-gallery-intro">
             <p className="hm-eyebrow">02 — Services</p>
@@ -151,7 +192,16 @@ export default function HomePage({ items, onSelect, restoreScrollY = 0 }) {
             <p>Scroll to explore. Click any card to open it.</p>
           </div>
           {sections.map((item, i) => (
-            <button type="button" className="hm-card" key={item.id} onClick={() => onSelect(item.id)}>
+            <button
+              type="button"
+              className="hm-card"
+              key={item.id}
+              onMouseDown={(e) => {
+                // Prevent browser focus-scroll algorithm from displacing the transformed carousel on click
+                e.preventDefault();
+              }}
+              onClick={() => onSelect(item.id, { index: i })}
+            >
               <img className="hm-card-image" src={SECTION_IMAGES[item.id]} alt="" loading="lazy" />
               <span className="hm-card-meta"><span>{String(i + 1).padStart(2, '0')}</span><span>Open →</span></span>
               <span className="hm-card-title">{item.label}</span>
@@ -204,7 +254,9 @@ export default function HomePage({ items, onSelect, restoreScrollY = 0 }) {
       <footer className="hm-footer">
         <h2>Found something?</h2>
         <p>Help it find its way back to its owner.</p>
-        <button type="button" className="hm-btn hm-btn-solid" onClick={() => onSelect('report_found')}>Report a found item</button>
+        <button type="button" className="hm-btn hm-btn-solid" onClick={() => onSelect('report_found', { fromFooter: true })}>
+          Report a found item
+        </button>
       </footer>
     </div>
   );

@@ -11,7 +11,7 @@
 
 .section-nav-glass-active {
   --glass-frost: 0.24 !important;
-  box-shadow: 0 0 0 1px rgba(85, 147, 235, 0.48), 0 4px 20px rgba(57, 125, 221, 0.2);
+  box-shadow: 0 0 0 1px rgba(230, 224, 240, 0.45), 0 4px 20px rgba(111, 78, 55, 0.35);
 }
 
 .section-nav-icon-button {
@@ -24,18 +24,18 @@
   border: 0;
   border-radius: inherit;
   background: transparent;
-  color: rgba(244, 244, 245, 0.75);
+  color: rgba(229, 228, 226, 0.75);
   cursor: pointer;
   transition: color 180ms ease, background-color 180ms ease;
 }
 
 .section-nav-icon-button:hover,
 .section-nav-icon-button[aria-current='page'] {
-  color: #e8f1ff;
+  color: #FAF9F8;
 }
 
 .section-nav-icon-button:focus-visible {
-  outline: 2px solid #5593eb;
+  outline: 2px solid #E6E0F0;
   outline-offset: -4px;
 }
 
@@ -53,16 +53,16 @@
   z-index: 60;
   width: 232px;
   padding: 8px;
-  border: 1px solid rgba(244, 244, 245, 0.13);
+  border: 1px solid rgba(229, 228, 226, 0.16);
   border-radius: 16px;
-  background: rgba(25, 26, 29, 0.96);
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42);
+  background: rgba(36, 23, 18, 0.96);
+  box-shadow: 0 18px 48px rgba(12, 7, 5, 0.55);
   backdrop-filter: blur(20px);
 }
 
 .account-menu-heading {
   margin: 4px 8px 7px;
-  color: rgba(244, 244, 245, 0.46);
+  color: rgba(229, 228, 226, 0.5);
   font-size: 0.67rem;
   font-weight: 700;
   letter-spacing: 0.14em;
@@ -79,7 +79,7 @@
   border: 0;
   border-radius: 10px;
   background: transparent;
-  color: #e4e4e7;
+  color: #E5E4E2;
   text-align: left;
   cursor: pointer;
 }
@@ -87,12 +87,12 @@
 .account-menu > button:hover,
 .account-menu > button:focus-visible {
   outline: none;
-  background: rgba(57, 125, 221, 0.16);
-  color: #e8f1ff;
+  background: rgba(111, 78, 55, 0.28);
+  color: #FAF9F8;
 }
 
-.account-menu > button svg { color: #78aaf2; }
-.account-menu-divider { height: 1px; margin: 6px 4px; background: rgba(244, 244, 245, 0.1); }
+.account-menu > button svg { color: #E6E0F0; }
+.account-menu-divider { height: 1px; margin: 6px 4px; background: rgba(229, 228, 226, 0.1); }
 
 @media (max-width: 700px) {
   .section-nav-glass {
