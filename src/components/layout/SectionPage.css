@@ -21,7 +21,7 @@
 
 .section-page-heading p {
   margin: 0 0 8px;
-  color: #b5b7bd;
+  color: #E6E0F0;
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.16em;
@@ -30,7 +30,7 @@
 
 .section-page-heading h1 {
   margin: 0;
-  color: #f4f4f5;
+  color: #FAF9F8;
   font-size: clamp(1.7rem, 3vw, 2.5rem);
   font-weight: 700;
   letter-spacing: -0.04em;
@@ -39,7 +39,7 @@
 .section-page-heading span {
   display: block;
   margin-top: 8px;
-  color: rgba(244, 244, 245, 0.68);
+  color: rgba(229, 228, 226, 0.75);
   font-size: 0.98rem;
 }
 
@@ -53,5 +53,4 @@
     width: min(100% - 28px, 1600px);
     padding-top: 28px;
   }
-
 }

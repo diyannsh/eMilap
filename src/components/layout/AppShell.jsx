@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { LogIn, Settings2, UserPlus } from 'lucide-react';
-import Topography from '../canvas/Topography.jsx';
+import MochaFlowerBackground from '../canvas/MochaFlowerBackground.jsx';
 import GlassSurface from '../ui/GlassSurface.jsx';
 import AccountAccess from '../account/AccountAccess.jsx';
 import { MapPin } from '../../lib/icons.js';
@@ -45,46 +45,24 @@ export default function AppShell({ activeView, navigationItems, onNavigate, tran
   }, []);
 
   return (
-    <div className="relative min-h-screen w-full bg-cocoa-950 font-sans text-platinum-500" style={{ backgroundColor: '#1E1310' }}>
+    <div className="relative min-h-screen w-full bg-[#0E0805] font-sans text-platinum-500" style={{ backgroundColor: '#0E0805' }}>
       <main
         ref={mainRef}
         className="app-main relative flex min-h-screen w-full flex-col"
       >
-        <Topography
-          className="pointer-events-none fixed inset-0 z-0"
-          style={{ position: 'fixed', inset: 0, height: '100vh' }}
-          color="#C68B59"
-          lineCount={26}
-          lineWidth={1.3}
-          elevation={1.15}
-          foreground={0.2}
-          tilt={32}
-          speed={0.16}
-          direction="forward"
-          morph={0.32}
-          glow={0.58}
-          depthOfField={0.32}
-          fog={0.42}
-          hoverEffect="lift"
-          mouseStrength={0.68}
-          mouseRadius={1.4}
-          trail={0.22}
-          parallax={0.32}
-          markers="dots"
-          clickEffect="none"
-        />
+        <MochaFlowerBackground activeView={activeView} />
 
-        <header className="fixed inset-x-3 top-3 z-40 mx-auto flex w-[calc(100%-1.5rem)] max-w-[1400px] flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-[28px] border border-white/10 bg-[#1d1c1f]/75 px-3 py-2 shadow-lg shadow-black/10 backdrop-blur-xl xl:flex-nowrap xl:px-5">
+        <header className="fixed inset-x-3 top-3 z-40 mx-auto flex w-[calc(100%-1.5rem)] max-w-[1400px] flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-[28px] border border-[#E5E4E2]/15 bg-[#231713]/85 px-3 py-2 shadow-lg shadow-black/10 backdrop-blur-xl xl:flex-nowrap xl:px-5">
           <button
             type="button"
             onClick={() => onNavigate('dashboard')}
-            className="flex items-center gap-3 rounded-xl text-left transition hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lavender-300"
+            className="flex items-center gap-3 rounded-xl text-left transition hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#E6E0F0]"
             aria-label="Go to eMilap sections"
           >
-            <MapPin className="text-lavender-300" size={25} />
+            <MapPin className="text-[#E6E0F0]" size={25} />
             <span>
-              <span className="block text-xl font-bold leading-none text-platinum-400">eMilap</span>
-              <span className="mt-1 block text-[10px] font-semibold uppercase tracking-[0.18em] text-platinum-500/65">Campus Lost &amp; Found</span>
+              <span className="block text-xl font-bold leading-none text-[#FAF9F8]">eMilap</span>
+              <span className="mt-1 block text-[10px] font-semibold uppercase tracking-[0.18em] text-[#E5E4E2]/70">Campus Lost &amp; Found</span>
             </span>
           </button>
 
@@ -154,15 +132,15 @@ export default function AppShell({ activeView, navigationItems, onNavigate, tran
             <button
               type="button"
               onClick={() => onNavigate('dashboard')}
-              className="section-nav-back rounded-full border border-mocha-700 bg-mocha-900/80 px-4 py-2 text-sm font-medium text-platinum-400 backdrop-blur transition-colors hover:border-lavender-500/60 hover:bg-mocha-800"
+              className="section-nav-back rounded-full border border-[#6F4E37]/50 bg-[#2C1C16]/85 px-4 py-2 text-sm font-medium text-[#E5E4E2] backdrop-blur transition-colors hover:border-[#E6E0F0]/60 hover:bg-[#3D261E]"
             >
               ← All sections
               <span className="sr-only"> (current: {activeLabel})</span>
             </button>
           )}
 
-          <div className="flex items-center gap-2 rounded-full border border-mocha-700 bg-mocha-900/80 px-4 py-2 text-xs font-medium text-platinum-400 backdrop-blur">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-signal-400" />
+          <div className="flex items-center gap-2 rounded-full border border-[#6F4E37]/45 bg-[#2C1C16]/85 px-4 py-2 text-xs font-medium text-[#E5E4E2] backdrop-blur">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-[#EAAA00]" />
             Campus community
           </div>
         </header>
