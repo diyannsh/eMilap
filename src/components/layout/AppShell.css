@@ -11,7 +11,7 @@
 
 .section-nav-glass-active {
   --glass-frost: 0.24 !important;
-  box-shadow: 0 0 0 1px rgba(194, 170, 224, 0.45), 0 4px 20px rgba(154, 119, 194, 0.18);
+  box-shadow: 0 0 0 1px rgba(85, 147, 235, 0.48), 0 4px 20px rgba(57, 125, 221, 0.2);
 }
 
 .section-nav-icon-button {
@@ -31,11 +31,11 @@
 
 .section-nav-icon-button:hover,
 .section-nav-icon-button[aria-current='page'] {
-  color: #e6e0f0;
+  color: #e8f1ff;
 }
 
 .section-nav-icon-button:focus-visible {
-  outline: 2px solid #c2aae0;
+  outline: 2px solid #5593eb;
   outline-offset: -4px;
 }
 
@@ -87,11 +87,11 @@
 .account-menu > button:hover,
 .account-menu > button:focus-visible {
   outline: none;
-  background: rgba(194, 170, 224, 0.12);
-  color: #e6e0f0;
+  background: rgba(57, 125, 221, 0.16);
+  color: #e8f1ff;
 }
 
-.account-menu > button svg { color: #c2aae0; }
+.account-menu > button svg { color: #78aaf2; }
 .account-menu-divider { height: 1px; margin: 6px 4px; background: rgba(244, 244, 245, 0.1); }
 
 @media (max-width: 700px) {

@@ -44,7 +44,7 @@ const ClaimsView = () => (
         </div>
 
         <div className="mt-auto pt-6 flex gap-3">
-          <button className="flex-1 bg-lavender-600 hover:bg-lavender-500 text-white py-3 rounded-xl shadow transition font-medium flex justify-center items-center gap-2">
+          <button className="flex-1 bg-signal-500 hover:bg-signal-400 text-[#111113] py-3 rounded-xl shadow transition font-medium flex justify-center items-center gap-2">
             <Check size={18}/> Approve claim
           </button>
           <button className="flex-1 bg-mocha-800 hover:bg-mocha-700 text-platinum-500 py-3 rounded-xl border border-mocha-600 transition font-medium">

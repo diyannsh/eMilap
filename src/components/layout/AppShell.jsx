@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { LogIn, Settings2, UserPlus } from 'lucide-react';
-import GridScan from '../canvas/GridScan.jsx';
+import Topography from '../canvas/Topography.jsx';
 import GlassSurface from '../ui/GlassSurface.jsx';
 import AccountAccess from '../account/AccountAccess.jsx';
 import { MapPin } from '../../lib/icons.js';
@@ -13,6 +13,20 @@ export default function AppShell({ activeView, navigationItems, onNavigate, tran
   const [authMode, setAuthMode] = useState(null);
   const activeLabel = navigationItems.find((item) => item.id === activeView)?.label ?? 'Sections';
 
+  const openAuth = (mode) => {
+    const currentState = window.history.state ?? {};
+    window.history.pushState({ ...currentState, __emilapAuth: mode }, '');
+    setAuthMode(mode);
+  };
+
+  const closeAuth = () => {
+    if (window.history.state?.__emilapAuth) {
+      window.history.back();
+    } else {
+      setAuthMode(null);
+    }
+  };
+
   useEffect(() => {
     if (!accountMenuOpen) return undefined;
     const closeOnOutsideClick = (event) => {
@@ -22,43 +36,45 @@ export default function AppShell({ activeView, navigationItems, onNavigate, tran
     return () => document.removeEventListener('pointerdown', closeOnOutsideClick);
   }, [accountMenuOpen]);
 
+  useEffect(() => {
+    const handleAuthHistory = (event) => {
+      setAuthMode(event.state?.__emilapAuth ?? null);
+    };
+    window.addEventListener('popstate', handleAuthHistory);
+    return () => window.removeEventListener('popstate', handleAuthHistory);
+  }, []);
+
   return (
-    <div className="relative min-h-screen w-full bg-cocoa-950 font-sans text-platinum-500" style={{ backgroundColor: '#101113' }}>
+    <div className="relative min-h-screen w-full bg-cocoa-950 font-sans text-platinum-500" style={{ backgroundColor: '#1E1310' }}>
       <main
         ref={mainRef}
         className="app-main relative flex min-h-screen w-full flex-col"
-        onPointerMove={(event) => {
-          const main = event.currentTarget;
-          const bounds = main.getBoundingClientRect();
-          const background = main.querySelector('.grid-scan');
-          if (!background) return;
-          const x = Math.min(1, Math.max(0, (event.clientX - bounds.left) / bounds.width));
-          const y = Math.min(1, Math.max(0, (event.clientY - bounds.top) / bounds.height));
-          background.style.setProperty('--pointer-x', `${(x - 0.5) * 8}deg`);
-          background.style.setProperty('--pointer-y', `${(y - 0.5) * -5}deg`);
-          background.style.setProperty('--pointer-x-pos', `${x * 100}%`);
-          background.style.setProperty('--pointer-y-pos', `${y * 100}%`);
-        }}
-        onPointerLeave={(event) => {
-          const background = event.currentTarget.querySelector('.grid-scan');
-          if (!background) return;
-          background.style.setProperty('--pointer-x', '0deg');
-          background.style.setProperty('--pointer-y', '0deg');
-          background.style.setProperty('--pointer-x-pos', '50%');
-          background.style.setProperty('--pointer-y-pos', '42%');
-        }}
       >
-        <GridScan
+        <Topography
           className="pointer-events-none fixed inset-0 z-0"
           style={{ position: 'fixed', inset: 0, height: '100vh' }}
-          linesColor="#4a4d54"
-          scanColor="#d8dade"
-          cells={8}
-          depth={3}
+          color="#C68B59"
+          lineCount={26}
+          lineWidth={1.3}
+          elevation={1.15}
+          foreground={0.2}
+          tilt={32}
+          speed={0.16}
+          direction="forward"
+          morph={0.32}
+          glow={0.58}
+          depthOfField={0.32}
+          fog={0.42}
+          hoverEffect="lift"
+          mouseStrength={0.68}
+          mouseRadius={1.4}
+          trail={0.22}
+          parallax={0.32}
+          markers="dots"
           clickEffect="none"
         />
 
-        <header className="fixed inset-x-3 top-3 z-40 mx-auto flex w-[calc(100%-1.5rem)] max-w-[1400px] flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-[28px] border border-white/10 bg-[#17181b]/55 px-3 py-2 shadow-lg shadow-black/10 backdrop-blur-xl xl:flex-nowrap xl:px-5">
+        <header className="fixed inset-x-3 top-3 z-40 mx-auto flex w-[calc(100%-1.5rem)] max-w-[1400px] flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-[28px] border border-white/10 bg-[#1d1c1f]/75 px-3 py-2 shadow-lg shadow-black/10 backdrop-blur-xl xl:flex-nowrap xl:px-5">
           <button
             type="button"
             onClick={() => onNavigate('dashboard')}
@@ -114,11 +130,11 @@ export default function AppShell({ activeView, navigationItems, onNavigate, tran
                   {isAccount && accountMenuOpen && (
                     <div className="account-menu" role="menu" aria-label="Account menu">
                       <p className="account-menu-heading">Your account</p>
-                      <button type="button" role="menuitem" onClick={() => { setAccountMenuOpen(false); setAuthMode('login'); }}>
+                      <button type="button" role="menuitem" onClick={() => { setAccountMenuOpen(false); openAuth('login'); }}>
                         <LogIn size={17} aria-hidden="true" />
                         <span>Sign in</span>
                       </button>
-                      <button type="button" role="menuitem" onClick={() => { setAccountMenuOpen(false); setAuthMode('signup'); }}>
+                      <button type="button" role="menuitem" onClick={() => { setAccountMenuOpen(false); openAuth('signup'); }}>
                         <UserPlus size={17} aria-hidden="true" />
                         <span>Create account</span>
                       </button>
@@ -146,12 +162,12 @@ export default function AppShell({ activeView, navigationItems, onNavigate, tran
           )}
 
           <div className="flex items-center gap-2 rounded-full border border-mocha-700 bg-mocha-900/80 px-4 py-2 text-xs font-medium text-platinum-400 backdrop-blur">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-lavender-300" />
+            <span className="h-2 w-2 animate-pulse rounded-full bg-signal-400" />
             Campus community
           </div>
         </header>
 
-        {authMode && <AccountAccess initialMode={authMode} onClose={() => setAuthMode(null)} />}
+        {authMode && <AccountAccess initialMode={authMode} onClose={closeAuth} />}
 
         <div className="h-[144px] shrink-0 xl:h-20" aria-hidden="true" />
 

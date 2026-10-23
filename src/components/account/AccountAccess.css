@@ -48,10 +48,10 @@
   height: 46px;
   margin-bottom: 20px;
   place-items: center;
-  border: 1px solid rgba(194, 170, 224, 0.34);
+  border: 1px solid rgba(85, 147, 235, 0.34);
   border-radius: 15px;
-  background: rgba(154, 119, 194, 0.12);
-  color: #d5c3eb;
+  background: rgba(57, 125, 221, 0.12);
+  color: #a9caff;
 }
 
 .account-access-eyebrow {
@@ -115,28 +115,28 @@
   color: rgba(244, 244, 245, 0.48);
   transition: border-color 160ms ease, box-shadow 160ms ease;
 }
-.account-access-input-wrap:focus-within { border-color: #ae90d0; box-shadow: 0 0 0 3px rgba(174, 144, 208, 0.13); }
+.account-access-input-wrap:focus-within { border-color: #5593eb; box-shadow: 0 0 0 3px rgba(85, 147, 235, 0.16); }
 .account-access-input-wrap input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: #f4f4f5; font-size: 0.95rem; }
 .account-access-input-wrap input::placeholder { color: rgba(244, 244, 245, 0.38); }
 .account-access-reveal { display: grid; flex: 0 0 auto; place-items: center; padding: 4px; border: 0; background: transparent; color: #bcbec4; cursor: pointer; }
 .account-access-options { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 0.84rem; }
 .account-access-remember { display: inline-flex; align-items: center; gap: 8px; color: rgba(244, 244, 245, 0.72); }
-.account-access-remember input { accent-color: #a887cc; }
-.account-access-link { padding: 0; border: 0; background: transparent; color: #c2aae0; font-weight: 600; cursor: pointer; }
-.account-access-link:hover { color: #e6e0f0; text-decoration: underline; text-underline-offset: 3px; }
+.account-access-remember input { accent-color: #397ddd; }
+.account-access-link { padding: 0; border: 0; background: transparent; color: #78aaf2; font-weight: 600; cursor: pointer; }
+.account-access-link:hover { color: #e8f1ff; text-decoration: underline; text-underline-offset: 3px; }
 .account-access-hint { margin: -4px 0 0; color: rgba(244, 244, 245, 0.56); font-size: 0.8rem; line-height: 1.45; }
 .account-access-submit {
   min-height: 50px;
   margin-top: 2px;
-  border: 1px solid rgba(211, 190, 237, 0.65);
+  border: 1px solid rgba(120, 170, 242, 0.65);
   border-radius: 12px;
-  background: #9473b8;
+  background: #397ddd;
   color: #fff;
   font-weight: 700;
   cursor: pointer;
   transition: background 160ms ease, transform 160ms ease;
 }
-.account-access-submit:hover { background: #a282c7; transform: translateY(-1px); }
+.account-access-submit:hover { background: #5593eb; transform: translateY(-1px); }
 .account-access-divider { display: flex; align-items: center; gap: 12px; margin: 20px 0; color: rgba(244, 244, 245, 0.42); font-size: 0.78rem; }
 .account-access-divider::before, .account-access-divider::after { height: 1px; flex: 1; background: rgba(244, 244, 245, 0.12); content: ''; }
 .account-access-google {
@@ -155,7 +155,7 @@
 }
 .account-access-google:hover { background: rgba(255, 255, 255, 0.08); }
 .account-access-google-mark { font-size: 1.2rem; font-weight: 800; color: #d8dade; }
-.account-access-message { margin: 16px 0 0; padding: 11px 12px; border: 1px solid rgba(194, 170, 224, 0.2); border-radius: 10px; background: rgba(154, 119, 194, 0.1); color: #e6e0f0; font-size: 0.82rem; line-height: 1.45; }
+.account-access-message { margin: 16px 0 0; padding: 11px 12px; border: 1px solid rgba(85, 147, 235, 0.24); border-radius: 10px; background: rgba(57, 125, 221, 0.12); color: #e8f1ff; font-size: 0.82rem; line-height: 1.45; }
 .account-access-switch { margin: 22px 0 0; color: rgba(244, 244, 245, 0.72); text-align: center; font-size: 0.88rem; }
 .account-access-back { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 22px auto 0; border: 0; background: transparent; color: #e4e4e7; cursor: pointer; }
 .account-access-note { margin: 22px 0 0; color: rgba(244, 244, 245, 0.38); text-align: center; font-size: 0.72rem; }
