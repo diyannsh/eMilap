@@ -1,5 +1,5 @@
 # ==============================================================================
-# FoundNear AI — Python AI Matching Service Dockerfile
+# e-Milap — Python AI Matching Service Dockerfile
 # ==============================================================================
 
 FROM python:3.11-slim AS runner

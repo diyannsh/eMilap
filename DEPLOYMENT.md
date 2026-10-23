@@ -1,4 +1,4 @@
-# FoundNear AI — deployment preparation
+# e-Milap — deployment preparation
 
 This document is a preparation checklist, not a deployment record. No live resources have been changed.
 

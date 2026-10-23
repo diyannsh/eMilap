@@ -14,7 +14,7 @@ const DESC = {
   'Ownership Claims': 'Review the private details used to confirm the owner of an item.',
   Updates: 'Find updates related to your lost-and-found reports.',
   Moderation: 'Review reports and ownership claims that may need attention.',
-  'Account Settings': 'Manage your eMilap account preferences.',
+  'Account Settings': 'Manage your e-Milap account preferences.',
 };
 
 const SECTION_IMAGES = {
@@ -118,14 +118,14 @@ export default function HomePage({ items, onSelect, restoreScrollY = 0 }) {
     <div className="hm" ref={rootRef}>
       <section className="hm-hero">
         <p className="hm-eyebrow hm-fade">Campus Lost &amp; Found</p>
-        <h1 className="hm-title" aria-label="eMilap">
-          {[...'eMilap'].map((c, i) => (
+        <h1 className="hm-title" aria-label="e-Milap">
+          {[...'e-Milap'].map((c, i) => (
             <span className="hm-char-wrap" key={i}><span className="hm-char">{c}</span></span>
           ))}
         </h1>
         <p className="hm-headline hm-fade">Lost something on campus? Let&apos;s get it back to you.</p>
         <p className="hm-lede hm-fade">
-          eMilap connects people who lost an item with the people who found it. Report it, review possible
+          e-Milap connects people who lost an item with the people who found it. Report it, review possible
           matches, and confirm ownership with private details, all in one place.
         </p>
         <div className="hm-cta hm-fade">
@@ -155,7 +155,7 @@ export default function HomePage({ items, onSelect, restoreScrollY = 0 }) {
               <img className="hm-card-image" src={SECTION_IMAGES[item.id]} alt="" loading="lazy" />
               <span className="hm-card-meta"><span>{String(i + 1).padStart(2, '0')}</span><span>Open →</span></span>
               <span className="hm-card-title">{item.label}</span>
-              <span className="hm-card-desc">{DESC[item.label] ?? 'Use eMilap to report, find, and return items on campus.'}</span>
+              <span className="hm-card-desc">{DESC[item.label] ?? 'Use e-Milap to report, find, and return items on campus.'}</span>
             </button>
           ))}
           <div className="hm-track-end" />

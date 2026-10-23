@@ -1,4 +1,4 @@
-# Milestone 13 — Evaluation Guide (FoundNear AI)
+# Milestone 13 — Evaluation Guide (e-Milap)
 
 ## What works
 - Deterministic matcher (M7) with documented weights.

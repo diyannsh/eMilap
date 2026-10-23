@@ -31,7 +31,7 @@ export default function AccountAccess({ initialMode = 'login', onClose }) {
     };
   }, [onClose]);
 
-  const title = mode === 'signup' ? 'Create an eMilap account' : mode === 'forgot' ? 'Reset your password' : 'Sign in to eMilap';
+  const title = mode === 'signup' ? 'Create an e-Milap account' : mode === 'forgot' ? 'Reset your password' : 'Sign in to e-Milap';
   const subtitle = mode === 'signup'
     ? 'Join your campus lost-and-found community.'
     : mode === 'forgot'
@@ -56,7 +56,7 @@ export default function AccountAccess({ initialMode = 'login', onClose }) {
         {mode === 'forgot' && (
           <div className="account-access-mark"><KeyRound size={21} /></div>
         )}
-        <p className="account-access-eyebrow">eMilap · Campus Lost &amp; Found</p>
+        <p className="account-access-eyebrow">e-Milap · Campus Lost &amp; Found</p>
         <h2 id="account-access-title">{title}</h2>
         <p className="account-access-subtitle">{subtitle}</p>
 

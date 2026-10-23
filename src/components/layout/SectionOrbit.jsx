@@ -48,7 +48,7 @@ export default function SectionOrbit({ items, onSelect, paused = false, freezeIt
         centerContent={(
           <div className="section-orbit-center">
             <span className="section-orbit-mark">eM</span>
-            <h2>eMilap</h2>
+            <h2>e-Milap</h2>
             <p>Choose a lost-and-found service</p>
           </div>
         )}

@@ -1,5 +1,5 @@
 # ==============================================================================
-# FoundNear AI — API Server Production Dockerfile (Multi-Stage)
+# e-Milap — API Server Production Dockerfile (Multi-Stage)
 # ==============================================================================
 
 # Stage 1: Build stage

@@ -1,5 +1,5 @@
 """
-FoundNear AI — Embedding Service
+e-Milap — Embedding Service
 Handles vector embedding generation for semantic item matching.
 Deterministic attribute matching continues when this service is disabled or unconfigured.
 """

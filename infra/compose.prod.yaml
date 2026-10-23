@@ -1,5 +1,5 @@
 # ==============================================================================
-# FoundNear AI — Production / Self-Hosted Stack Compose Configuration
+# e-Milap — Production / Self-Hosted Stack Compose Configuration
 # ==============================================================================
 # Usage:
 #   docker compose -f infra/compose.prod.yaml --env-file .env.production up -d

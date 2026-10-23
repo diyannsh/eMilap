@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * FoundNear AI — Production Database Migration Runner
+ * e-Milap — Production Database Migration Runner
  * 
  * Safely applies sequential SQL migrations with tracking, transactions,
  * and idempotency.

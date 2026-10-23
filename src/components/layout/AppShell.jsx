@@ -79,11 +79,11 @@ export default function AppShell({ activeView, navigationItems, onNavigate, tran
             type="button"
             onClick={() => onNavigate('dashboard')}
             className="flex items-center gap-3 rounded-xl text-left transition hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lavender-300"
-            aria-label="Go to eMilap sections"
+            aria-label="Go to e-Milap sections"
           >
             <MapPin className="text-lavender-300" size={25} />
             <span>
-              <span className="block text-xl font-bold leading-none text-platinum-400">eMilap</span>
+              <span className="block text-xl font-bold leading-none text-platinum-400">e-Milap</span>
               <span className="mt-1 block text-[10px] font-semibold uppercase tracking-[0.18em] text-platinum-500/65">Campus Lost &amp; Found</span>
             </span>
           </button>

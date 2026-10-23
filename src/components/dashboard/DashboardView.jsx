@@ -1,9 +1,9 @@
-﻿import FloatingPanel from '../ui/FloatingPanel.jsx';
+import FloatingPanel from '../ui/FloatingPanel.jsx';
 import { AlertCircle, AlertTriangle, CheckCircle, FileSearch } from '../../lib/icons.js';
 
 const DashboardView = ({ setView }) => (
   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-7xl mx-auto mt-8 pointer-events-none">
-    <FloatingPanel title="Welcome to eMilap" className="h-64 col-span-1 md:col-span-2 pointer-events-auto">
+    <FloatingPanel title="Welcome to e-Milap" className="h-64 col-span-1 md:col-span-2 pointer-events-auto">
       <div className="flex flex-col h-full justify-between">
         <p className="text-platinum-500">Report a lost item, list something you found, and review possible matches across campus.</p>
         <div className="flex gap-4 mt-6">
