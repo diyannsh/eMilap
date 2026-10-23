@@ -1,0 +1,166 @@
+.account-access-overlay {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: flex;
+  align-items: safe center;
+  justify-content: center;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  padding: 24px;
+  background: rgba(5, 6, 8, 0.76);
+  backdrop-filter: blur(12px);
+}
+
+.account-access-dialog {
+  position: relative;
+  flex: 0 0 auto;
+  width: min(100%, 480px);
+  margin-block: auto;
+  padding: clamp(24px, 5vw, 42px);
+  border: 1px solid rgba(244, 244, 245, 0.12);
+  border-radius: 24px;
+  background: linear-gradient(145deg, rgba(37, 39, 44, 0.98), rgba(20, 21, 24, 0.98));
+  color: #f4f4f5;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.5);
+}
+
+.account-access-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid rgba(244, 244, 245, 0.12);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.04);
+  color: #d8dade;
+  cursor: pointer;
+}
+
+.account-access-mark {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  margin-bottom: 20px;
+  place-items: center;
+  border: 1px solid rgba(194, 170, 224, 0.34);
+  border-radius: 15px;
+  background: rgba(154, 119, 194, 0.12);
+  color: #d5c3eb;
+}
+
+.account-access-eyebrow {
+  margin: 0 42px 10px 0;
+  color: #bcbec4;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.account-access-dialog h2 {
+  margin: 0;
+  font-size: clamp(1.55rem, 5vw, 2rem);
+  letter-spacing: -0.04em;
+}
+
+.account-access-subtitle {
+  margin: 8px 0 24px;
+  color: rgba(244, 244, 245, 0.66);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.account-access-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin: 0 0 24px;
+  padding: 4px;
+  border: 1px solid rgba(244, 244, 245, 0.1);
+  border-radius: 13px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.account-access-tabs button {
+  min-height: 40px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: rgba(244, 244, 245, 0.66);
+  cursor: pointer;
+}
+
+.account-access-tabs button.is-active {
+  background: rgba(244, 244, 245, 0.1);
+  color: #fff;
+}
+
+.account-access-form { display: grid; gap: 18px; }
+.account-access-form > label { display: grid; gap: 8px; color: #e4e4e7; font-size: 0.88rem; font-weight: 550; }
+.account-access-input-wrap {
+  display: flex;
+  min-height: 50px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  border: 1px solid rgba(244, 244, 245, 0.15);
+  border-radius: 12px;
+  background: rgba(9, 10, 12, 0.35);
+  color: rgba(244, 244, 245, 0.48);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+.account-access-input-wrap:focus-within { border-color: #ae90d0; box-shadow: 0 0 0 3px rgba(174, 144, 208, 0.13); }
+.account-access-input-wrap input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: #f4f4f5; font-size: 0.95rem; }
+.account-access-input-wrap input::placeholder { color: rgba(244, 244, 245, 0.38); }
+.account-access-reveal { display: grid; flex: 0 0 auto; place-items: center; padding: 4px; border: 0; background: transparent; color: #bcbec4; cursor: pointer; }
+.account-access-options { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 0.84rem; }
+.account-access-remember { display: inline-flex; align-items: center; gap: 8px; color: rgba(244, 244, 245, 0.72); }
+.account-access-remember input { accent-color: #a887cc; }
+.account-access-link { padding: 0; border: 0; background: transparent; color: #c2aae0; font-weight: 600; cursor: pointer; }
+.account-access-link:hover { color: #e6e0f0; text-decoration: underline; text-underline-offset: 3px; }
+.account-access-hint { margin: -4px 0 0; color: rgba(244, 244, 245, 0.56); font-size: 0.8rem; line-height: 1.45; }
+.account-access-submit {
+  min-height: 50px;
+  margin-top: 2px;
+  border: 1px solid rgba(211, 190, 237, 0.65);
+  border-radius: 12px;
+  background: #9473b8;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 160ms ease, transform 160ms ease;
+}
+.account-access-submit:hover { background: #a282c7; transform: translateY(-1px); }
+.account-access-divider { display: flex; align-items: center; gap: 12px; margin: 20px 0; color: rgba(244, 244, 245, 0.42); font-size: 0.78rem; }
+.account-access-divider::before, .account-access-divider::after { height: 1px; flex: 1; background: rgba(244, 244, 245, 0.12); content: ''; }
+.account-access-google {
+  display: flex;
+  width: 100%;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 1px solid rgba(244, 244, 245, 0.17);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+  color: #f4f4f5;
+  font-weight: 600;
+  cursor: pointer;
+}
+.account-access-google:hover { background: rgba(255, 255, 255, 0.08); }
+.account-access-google-mark { font-size: 1.2rem; font-weight: 800; color: #d8dade; }
+.account-access-message { margin: 16px 0 0; padding: 11px 12px; border: 1px solid rgba(194, 170, 224, 0.2); border-radius: 10px; background: rgba(154, 119, 194, 0.1); color: #e6e0f0; font-size: 0.82rem; line-height: 1.45; }
+.account-access-switch { margin: 22px 0 0; color: rgba(244, 244, 245, 0.72); text-align: center; font-size: 0.88rem; }
+.account-access-back { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 22px auto 0; border: 0; background: transparent; color: #e4e4e7; cursor: pointer; }
+.account-access-note { margin: 22px 0 0; color: rgba(244, 244, 245, 0.38); text-align: center; font-size: 0.72rem; }
+
+@media (max-width: 480px) {
+  .account-access-overlay { padding: 14px; }
+  .account-access-dialog { border-radius: 19px; }
+}

@@ -1,74 +1,40 @@
-import { useLayoutEffect, useState } from 'react';
+import { useRef, useState } from 'react';
+import { gsap } from 'gsap';
 import AdminView from './components/admin/AdminView.jsx';
 import BrowseView from './components/browse/BrowseView.jsx';
 import ClaimsView from './components/claims/ClaimsView.jsx';
 import AppShell from './components/layout/AppShell.jsx';
-import SectionOrbit from './components/layout/SectionOrbit.jsx';
+import HomePage from './components/layout/HomePage.jsx';
 import SectionPage from './components/layout/SectionPage.jsx';
-import SpatialTransition from './components/layout/SpatialTransition.jsx';
 import MatchesView from './components/matches/MatchesView.jsx';
 import ReportFormView from './components/reports/ReportFormView.jsx';
 import EmptyPlaceholder from './components/ui/EmptyPlaceholder.jsx';
 import { navigationItems } from './data/navigation.js';
+import AccountSettingsView from './components/account/AccountSettingsView.jsx';
 
 export default function App() {
   const [activeView, setActiveView] = useState('dashboard');
-  const [transition, setTransition] = useState(null);
-  const [phase, setPhase] = useState('idle');
+  const [backToSections, setBackToSections] = useState(false);
+  const curtain = useRef(null);
+  const busy = useRef(false);
 
-  useLayoutEffect(() => {
-    if (phase !== 'opening' && phase !== 'closing') return undefined;
-    const { overflow, scrollbarGutter } = document.documentElement.style;
-    const bodyOverflow = document.body.style.overflow;
-    document.documentElement.style.scrollbarGutter = 'stable';
-    document.documentElement.style.overflow = 'hidden';
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.documentElement.style.overflow = overflow;
-      document.documentElement.style.scrollbarGutter = scrollbarGutter;
-      document.body.style.overflow = bodyOverflow;
-    };
-  }, [phase]);
-
-  const selectSection = (id, orbitIndex, card) => {
-    if (phase !== 'idle') return;
-    const section = navigationItems.find((item) => item.id === id);
-    if (!section || !card) return;
-    setTransition({ section, orbitIndex, card });
-    setPhase('opening');
-  };
-
-  const navigate = (id) => {
-    if (id === 'dashboard') {
-      if (phase === 'open') setPhase('closing');
-      else if (phase === 'idle' && activeView !== 'dashboard') {
-        setActiveView('dashboard');
-        window.scrollTo(0, 0);
-      }
-      return;
-    }
-    if (phase === 'idle') {
-      const section = navigationItems.find((item) => item.id === id);
-      if (section) {
+  // Page change: a curtain wipes up over the screen, the view swaps underneath, then it wipes away.
+  const go = (id) => {
+    if (busy.current || id === activeView) return;
+    if (id !== 'dashboard' && !navigationItems.some((item) => item.id === id)) return;
+    busy.current = true;
+    const c = curtain.current;
+    gsap.timeline({ onComplete: () => { busy.current = false; } })
+      .set(c, { display: 'block', scaleY: 0, transformOrigin: '50% 100%' })
+      .to(c, { scaleY: 1, duration: 0.38, ease: 'power3.inOut' })
+      .add(() => {
+        setBackToSections(id === 'dashboard');
         setActiveView(id);
         window.scrollTo(0, 0);
-      }
-    }
-  };
-
-  const showSection = () => {
-    if (!transition) return;
-    setActiveView(transition.section.id);
-  };
-
-  const finishOpen = () => {
-    setPhase('open');
-  };
-
-  const finishClose = () => {
-    setActiveView('dashboard');
-    setTransition(null);
-    setPhase('idle');
+      })
+      .set(c, { transformOrigin: '50% 0%' })
+      .to(c, { scaleY: 0, duration: 0.45, ease: 'power3.inOut', delay: 0.1 })
+      .set(c, { display: 'none' });
   };
 
   const views = {
@@ -78,33 +44,21 @@ export default function App() {
     matches: <MatchesView />,
     claims: <ClaimsView />,
     admin: <AdminView />,
+    settings: <AccountSettingsView />,
   };
-  const sectionId = activeView === 'dashboard' ? null : activeView;
-  const sectionIndex = navigationItems.findIndex((item) => item.id === sectionId);
+  const sectionIndex = navigationItems.findIndex((item) => item.id === activeView);
   const sectionTitle = navigationItems[sectionIndex]?.label ?? 'Section';
 
   return (
-    <AppShell activeView={activeView} navigationItems={navigationItems} onNavigate={navigate} transitioning={phase !== 'idle'}>
-      <div className={phase === 'open' ? 'orbit-scene orbit-scene-hidden' : 'orbit-scene'} aria-hidden={activeView !== 'dashboard'}>
-        <SectionOrbit items={navigationItems} onSelect={selectSection} paused={phase !== 'idle'} freezeItemIndex={transition?.orbitIndex ?? -1} />
-      </div>
-      {sectionId && (
-        <div className="section-transition-page" data-transition-page>
-          <SectionPage title={sectionTitle} sectionIndex={Math.max(0, sectionIndex)} transitionPending={phase !== 'idle'}>
-            {views[sectionId] ?? <EmptyPlaceholder title={sectionTitle} />}
-          </SectionPage>
-        </div>
+    <AppShell activeView={activeView} navigationItems={navigationItems} onNavigate={go}>
+      {activeView === 'dashboard' ? (
+        <HomePage items={navigationItems} onSelect={go} startAtSections={backToSections} />
+      ) : (
+        <SectionPage title={sectionTitle} sectionIndex={Math.max(0, sectionIndex)}>
+          {views[activeView] ?? <EmptyPlaceholder title={sectionTitle} />}
+        </SectionPage>
       )}
-      {transition && (
-        <SpatialTransition
-          card={transition.card}
-          pageReady={activeView === transition.section.id}
-          direction={phase === 'closing' ? 'close' : 'open'}
-          onCardArrive={showSection}
-          onOpenComplete={finishOpen}
-          onCloseComplete={finishClose}
-        />
-      )}
+      <div ref={curtain} className="page-curtain" aria-hidden="true" />
     </AppShell>
   );
 }
