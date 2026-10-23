@@ -17,13 +17,24 @@ const DESC = {
   'Account Settings': 'Manage your eMilap account preferences.',
 };
 
+const SECTION_IMAGES = {
+  report_lost: '/images/Report_lost.jpg',
+  report_found: '/images/Report_found.jpg',
+  browse: '/images/Campus_listings.jpg',
+  matches: '/images/Possible_matches.jpg',
+  claims: '/images/Ownership_claims.jpg',
+  notifications: '/images/Updates.jpg',
+  admin: '/images/Moderation.jpg',
+  settings: '/images/Account-settings.jpg',
+};
+
 const STEPS = [
   ['01', 'Report', 'Tell us what you lost or found, and where.'],
   ['02', 'Match', 'Reports are compared by details, category and location.'],
   ['03', 'Claim', 'Owners confirm with private details before anything is returned.'],
 ];
 
-export default function HomePage({ items, onSelect, startAtSections = false }) {
+export default function HomePage({ items, onSelect, restoreScrollY = 0 }) {
   const rootRef = useRef(null);
   const galleryRef = useRef(null);
   const trackRef = useRef(null);
@@ -82,7 +93,10 @@ export default function HomePage({ items, onSelect, startAtSections = false }) {
       });
       stRef.current = tween.scrollTrigger;
       ScrollTrigger.refresh();
-      if (startAtSections) lenis.scrollTo(tween.scrollTrigger.start, { immediate: true });
+      const restoreY = Math.max(0, restoreScrollY);
+      window.scrollTo(0, restoreY);
+      lenis.scrollTo(restoreY, { immediate: true, force: true });
+      ScrollTrigger.update();
     }, rootRef);
     return () => {
       ctx.revert();
@@ -138,7 +152,7 @@ export default function HomePage({ items, onSelect, startAtSections = false }) {
           </div>
           {sections.map((item, i) => (
             <button type="button" className="hm-card" key={item.id} onClick={() => onSelect(item.id)}>
-              <span className="hm-card-art" aria-hidden="true">{item.label.slice(0, 1)}</span>
+              <img className="hm-card-image" src={SECTION_IMAGES[item.id]} alt="" loading="lazy" />
               <span className="hm-card-meta"><span>{String(i + 1).padStart(2, '0')}</span><span>Open →</span></span>
               <span className="hm-card-title">{item.label}</span>
               <span className="hm-card-desc">{DESC[item.label] ?? 'Use eMilap to report, find, and return items on campus.'}</span>

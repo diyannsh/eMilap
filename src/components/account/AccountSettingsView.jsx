@@ -23,7 +23,7 @@ export default function AccountSettingsView() {
             <input className="rounded-xl border border-mocha-700 bg-mocha-950/70 px-4 py-3 text-platinum-400 outline-none focus:border-lavender-400" name="email" type="email" placeholder="you@campus.edu" autoComplete="email" />
           </label>
           <p className="text-xs leading-relaxed text-platinum-500">Profile details will be stored with your account after backend authentication is connected.</p>
-          <button className="w-full rounded-xl border border-[#b79ad6]/60 bg-[#8763ad] px-4 py-3 font-semibold text-white transition hover:bg-[#9671bd]" type="submit">Save profile</button>
+          <button className="w-full rounded-xl border border-[#78aaf2]/60 bg-[#397ddd] px-4 py-3 font-semibold text-white transition hover:bg-[#5593eb]" type="submit">Save profile</button>
         </form>
       </FloatingPanel>
 
@@ -49,7 +49,7 @@ export default function AccountSettingsView() {
         </div>
       </FloatingPanel>
 
-      {message && <p className="md:col-span-2 rounded-xl border border-[#b79ad6]/20 bg-[#8763ad]/10 px-4 py-3 text-sm text-platinum-400" role="status">{message}</p>}
+      {message && <p className="md:col-span-2 rounded-xl border border-[#5593eb]/25 bg-[#397ddd]/10 px-4 py-3 text-sm text-platinum-400" role="status">{message}</p>}
     </div>
   );
 }

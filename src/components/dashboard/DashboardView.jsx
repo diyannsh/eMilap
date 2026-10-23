@@ -10,7 +10,7 @@ const DashboardView = ({ setView }) => (
           <button onClick={() => setView('report_lost')} className="flex-1 bg-mocha-800 hover:bg-mocha-700 text-platinum-500 py-3 rounded-xl flex items-center justify-center gap-2 border border-mocha-700 transition">
             <AlertCircle size={18} /> Report a lost item
           </button>
-          <button onClick={() => setView('report_found')} className="flex-1 bg-lavender-600 hover:bg-lavender-500 text-white py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-lavender-900/20 transition">
+          <button onClick={() => setView('report_found')} className="flex-1 bg-signal-500 hover:bg-signal-400 text-[#111113] py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-black/20 transition">
             <CheckCircle size={18} /> Report a found item
           </button>
         </div>

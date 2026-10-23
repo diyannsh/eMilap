@@ -24,7 +24,7 @@ export default function SpatialTransition({ card, pageReady, direction, onCardAr
     if (!card) return undefined;
     const origin = card.getBoundingClientRect();
     const nav = document.querySelector('.section-nav-back');
-    const grid = document.querySelector('.grid-scan');
+    const grid = document.querySelector('.topography-container');
     const navOpacity = nav?.style.opacity ?? '';
     // The orbit renderer writes its own inline transform. Keep the entire declaration
     // block so the shared node returns exactly to that orbit-managed state.
