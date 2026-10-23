@@ -1,0 +1,117 @@
+# ==============================================================================
+# FoundNear AI — Production / Self-Hosted Stack Compose Configuration
+# ==============================================================================
+# Usage:
+#   docker compose -f infra/compose.prod.yaml --env-file .env.production up -d
+#
+# Note: For managed cloud providers (e.g., Render, Railway, Cloudflare Pages,
+# Neon, Supabase), see DEPLOYMENT.md for per-provider instructions.
+# ==============================================================================
+
+name: foundnear-production
+
+services:
+  # ----------------------------------------------------------------------------
+  # 1. Web Frontend (Nginx SPA Container)
+  # ----------------------------------------------------------------------------
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-80}:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80/healthz"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  # ----------------------------------------------------------------------------
+  # 2. API Backend (Node.js / Express Service)
+  # ----------------------------------------------------------------------------
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-4000}:4000"
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      - WEB_ORIGIN=${WEB_ORIGIN}
+      - DATABASE_URL=${DATABASE_URL}
+      - SESSION_SECRET=${SESSION_SECRET}
+      - SESSION_COOKIE_NAME=${SESSION_COOKIE_NAME:-foundnear.sid}
+      - SESSION_TTL_HOURS=${SESSION_TTL_HOURS:-168}
+      - STORAGE_LOCAL=false
+      - S3_ENDPOINT=${S3_ENDPOINT:-}
+      - S3_REGION=${S3_REGION:-us-east-1}
+      - S3_BUCKET_REPORTS=${S3_BUCKET_REPORTS}
+      - S3_BUCKET_EVIDENCE=${S3_BUCKET_EVIDENCE}
+      - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID}
+      - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY}
+      - S3_FORCE_PATH_STYLE=${S3_FORCE_PATH_STYLE:-false}
+      - AI_SERVICE_URL=${AI_SERVICE_URL:-}
+      - AI_SERVICE_TOKEN=${AI_SERVICE_TOKEN:-}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4000/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+  # ----------------------------------------------------------------------------
+  # 3. Matching Job Worker (Database-Backed Async Queue)
+  # ----------------------------------------------------------------------------
+  worker:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    command: ["node", "dist/jobs/worker.js"]
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - AI_SERVICE_URL=${AI_SERVICE_URL:-}
+      - AI_SERVICE_TOKEN=${AI_SERVICE_TOKEN:-}
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 384M
+
+  # ----------------------------------------------------------------------------
+  # 4. Optional AI Matching Service (Python / FastAPI)
+  # ----------------------------------------------------------------------------
+  # Note: Keep disabled or profile-gated for initial pilot launch.
+  ai:
+    build:
+      context: ..
+      dockerfile: apps/ai/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    profiles:
+      - ai-service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/live"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1024M

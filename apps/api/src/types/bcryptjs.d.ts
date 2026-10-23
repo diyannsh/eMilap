@@ -1,0 +1,1 @@
+declare module "bcryptjs" { export function hash(s: string, saltRounds?: number): Promise<string>; export function compare(s: string, hash: string): Promise<boolean>; export default { hash, compare }; }
