@@ -1,0 +1,215 @@
+.hm { width: 100%; color: #f4f4f5; }
+
+.hm-eyebrow {
+  margin: 0 0 12px;
+  color: rgba(216, 218, 222, 0.65);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+
+/* ---------- Hero ---------- */
+.hm-hero {
+  display: flex;
+  min-height: calc(100vh - 5rem);
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 clamp(24px, 6vw, 96px) 40px;
+}
+.hm-title {
+  margin: 0;
+  font-size: clamp(5rem, 19vw, 17rem);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.06em;
+}
+.hm-char-wrap { display: inline-block; overflow: hidden; padding-bottom: 0.14em; margin-bottom: -0.14em; }
+.hm-char {
+  display: inline-block;
+  background: linear-gradient(180deg, #f4f4f5 30%, #8f939b);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.hm-headline { margin: 18px 0 10px; max-width: 18ch; font-size: clamp(1.4rem, 3vw, 2.6rem); font-weight: 650; letter-spacing: -0.03em; line-height: 1.1; }
+.hm-lede { margin: 0; max-width: 56ch; color: rgba(244, 244, 245, 0.66); font-size: 1rem; line-height: 1.6; }
+.hm-cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+.hm-btn {
+  padding: 12px 22px;
+  border: 1px solid rgba(216, 218, 222, 0.35);
+  border-radius: 999px;
+  background: transparent;
+  color: #f4f4f5;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.25s, border-color 0.25s, transform 0.25s;
+}
+.hm-btn:hover { background: rgba(216, 218, 222, 0.12); transform: translateY(-2px); }
+.hm-btn-solid { border-color: #d8dade; background: #d8dade; color: #101113; }
+.hm-btn-solid:hover { background: #f4f4f5; }
+.hm-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin: 48px 0 0; padding: 0; list-style: none; }
+.hm-steps li { padding-top: 14px; border-top: 1px solid rgba(216, 218, 222, 0.2); }
+.hm-steps span { display: block; color: rgba(216, 218, 222, 0.5); font-size: 0.72rem; letter-spacing: 0.16em; }
+.hm-steps strong { display: block; margin: 6px 0 4px; font-size: 1.05rem; }
+.hm-steps p { margin: 0; color: rgba(244, 244, 245, 0.6); font-size: 0.85rem; line-height: 1.5; }
+
+/* ---------- Marquee ---------- */
+.hm-marquee { overflow: hidden; padding: 18px 0; border-block: 1px solid rgba(216, 218, 222, 0.14); white-space: nowrap; }
+.hm-marquee > div { display: inline-flex; animation: hm-marquee 32s linear infinite; will-change: transform; }
+.hm-marquee span {
+  font-size: clamp(2rem, 6vw, 5rem);
+  font-weight: 800;
+  color: transparent;
+  -webkit-text-stroke: 1px rgba(216, 218, 222, 0.3);
+}
+@keyframes hm-marquee { to { transform: translate3d(-50%, 0, 0); } }
+
+/* ---------- Pinned horizontal gallery ---------- */
+.hm-gallery { position: relative; height: 100vh; overflow: hidden; }
+.hm-track { display: flex; width: max-content; height: 100%; align-items: center; gap: 32px; padding: 0 6vw; will-change: transform; }
+.hm-gallery-intro { flex: none; width: min(420px, 80vw); }
+.hm-gallery-intro h2 { margin: 0; font-size: clamp(3rem, 8vw, 7rem); font-weight: 800; line-height: 0.95; letter-spacing: -0.05em; }
+.hm-gallery-intro p:last-child { margin: 16px 0 0; color: rgba(244, 244, 245, 0.6); font-size: 0.95rem; }
+.hm-track-end { flex: none; width: 4vw; }
+.hm-card {
+  position: relative;
+  display: flex;
+  flex: none;
+  width: clamp(300px, 42vw, 620px);
+  height: min(62vh, 540px);
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: hidden;
+  padding: 28px;
+  border: 1px solid rgba(216, 218, 222, 0.22);
+  border-radius: 24px;
+  background: linear-gradient(160deg, #2b2d32, #17181b);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.3s, transform 0.3s;
+}
+.hm-card:hover { border-color: rgba(244, 244, 245, 0.6); transform: translateY(-6px); }
+.hm-card-art {
+  position: absolute;
+  top: -0.12em;
+  right: 0.05em;
+  font-size: clamp(10rem, 28vw, 22rem);
+  font-weight: 800;
+  line-height: 1;
+  color: transparent;
+  -webkit-text-stroke: 1px rgba(216, 218, 222, 0.2);
+  transition: -webkit-text-stroke-color 0.3s;
+}
+.hm-card:hover .hm-card-art { -webkit-text-stroke-color: rgba(244, 244, 245, 0.5); }
+.hm-card-meta { position: absolute; top: 24px; left: 28px; right: 28px; display: flex; justify-content: space-between; color: rgba(216, 218, 222, 0.6); font-size: 0.78rem; letter-spacing: 0.14em; }
+.hm-card-title { position: relative; font-size: clamp(1.6rem, 3vw, 2.4rem); font-weight: 700; letter-spacing: -0.03em; }
+.hm-card-desc { position: relative; margin-top: 8px; max-width: 36ch; color: rgba(244, 244, 245, 0.66); font-size: 0.92rem; line-height: 1.5; }
+.hm-progress { position: absolute; left: 6vw; right: 6vw; bottom: 36px; height: 2px; background: rgba(216, 218, 222, 0.15); }
+.hm-progress i { display: block; height: 100%; background: #d8dade; transform: scaleX(0); transform-origin: left; }
+
+/* ---------- Current section rail ---------- */
+.hm-section-progress {
+  position: fixed;
+  z-index: 30;
+  top: 50%;
+  right: clamp(18px, 3vw, 54px);
+  color: #f4f4f5;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-50%);
+  transition: opacity 300ms ease, visibility 300ms ease;
+}
+.hm-section-progress.is-visible { opacity: 1; visibility: visible; }
+.hm-section-count {
+  display: block;
+  color: rgba(244, 244, 245, 0.62);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  white-space: nowrap;
+}
+.hm-section-rail {
+  position: relative;
+  width: 10px;
+  margin: 18px auto 0;
+}
+.hm-section-rail-track,
+.hm-section-rail-fill {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 50%;
+  width: 1px;
+  background: rgba(244, 244, 245, 0.22);
+  transform: translateX(-50%);
+}
+.hm-section-rail-fill {
+  background: rgba(230, 224, 240, 0.8);
+  transform: translateX(-50%) scaleY(0);
+  transform-origin: top center;
+}
+.hm-section-rail-thumb {
+  position: absolute;
+  z-index: 2;
+  top: -1px;
+  left: 1px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #e6e0f0;
+  box-shadow: 0 0 12px rgba(194, 170, 224, 0.65);
+  pointer-events: none;
+}
+.hm-section-dots { display: flex; flex-direction: column; gap: 20px; }
+.hm-section-dot {
+  position: relative;
+  z-index: 3;
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(244, 244, 245, 0.38);
+  cursor: pointer;
+  transition: background 220ms ease, transform 220ms ease, box-shadow 220ms ease;
+}
+.hm-section-dot:hover { background: rgba(244, 244, 245, 0.78); transform: scale(1.35); }
+.hm-section-dot.is-active { background: #e6e0f0; box-shadow: 0 0 0 4px rgba(194, 170, 224, 0.14); }
+.hm-section-active-label {
+  position: absolute;
+  top: 4px;
+  right: calc(100% + 20px);
+  color: #f4f4f5;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ---------- Footer ---------- */
+.hm-footer { padding: 14vh clamp(24px, 6vw, 96px) 12vh; border-top: 1px solid rgba(216, 218, 222, 0.14); }
+.hm-footer h2 { margin: 0; font-size: clamp(2.4rem, 7vw, 6rem); font-weight: 800; letter-spacing: -0.05em; }
+.hm-footer p { margin: 10px 0 26px; color: rgba(244, 244, 245, 0.6); }
+
+/* ---------- Page-change curtain (used by App.jsx) ---------- */
+.page-curtain { position: fixed; inset: 0; z-index: 50; display: none; background: #101113; pointer-events: none; }
+
+@media (max-width: 700px) {
+  .hm-steps { grid-template-columns: 1fr; gap: 16px; }
+  .hm-section-progress { right: 14px; }
+  .hm-section-rail { margin-top: 14px; }
+  .hm-section-dots { gap: 15px; }
+  .hm-section-active-label { right: calc(100% + 14px); font-size: 0.58rem; letter-spacing: 0.1em; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hm-marquee > div { animation: none; }
+  .hm-section-progress,
+  .hm-section-active-label,
+  .hm-section-dot { transition: none; }
+}
