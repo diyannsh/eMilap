@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { ChatService, extractSearchTokens } from "./chat.service";
+import {
+  ChatService,
+  extractSearchTokens,
+  selectBestAvailableModel,
+  PREFERRED_MODELS_PRIORITY,
+} from "./chat.service";
 import { chatMessageSchema } from "./chat.schemas";
 import { prisma } from "../../db/client";
 
@@ -492,6 +497,89 @@ describe("Chatbot Module Security & Scoping", () => {
       expect(res.reply).toContain("[Report Lost](#report-lost)");
       expect(res.actions?.some((a) => a.view === "report_lost")).toBe(true);
       expect(res.communityName).toBe("Campus Lost & Found");
+    });
+
+    describe("Model Prioritization & Free Tier Fallback (Gemini 3.8 / 3.5 / 2.5)", () => {
+      it("prioritizes gemini-3.8-flash when confirmed available in project models list", () => {
+        const models = ["gemini-2.5-flash", "gemini-3.8-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
+        const selected = selectBestAvailableModel(models);
+        expect(selected).toBe("gemini-3.8-flash");
+      });
+
+      it("prioritizes gemini-3.5-flash-lite when 3.8 is not available", () => {
+        const models = ["gemini-2.5-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash-lite"];
+        const selected = selectBestAvailableModel(models);
+        expect(selected).toBe("gemini-3.5-flash-lite");
+      });
+
+      it("falls back to gemini-2.5-flash when 3.x models are not enabled on the API key", () => {
+        const models = ["gemini-2.5-flash", "gemini-2.5-flash-lite"];
+        const selected = selectBestAvailableModel(models);
+        expect(selected).toBe("gemini-2.5-flash");
+      });
+
+      it("excludes shut-down models (gemini-1.5-flash, gemini-2.0-flash) completely", () => {
+        const models = ["gemini-1.5-flash", "gemini-2.0-flash"];
+        const selected = selectBestAvailableModel(models);
+        expect(selected).toBe("");
+      });
+
+      it("dispatches request to gemini-3.8-flash when confirmed by project discovery", async () => {
+        process.env.GEMINI_API_KEY = "test-ai-key-12345";
+        delete process.env.GEMINI_MODEL;
+
+        let calledUrl = "";
+        vi.spyOn(globalThis, "fetch").mockImplementation(async (url: any) => {
+          const u = String(url);
+          if (u.includes("/v1beta/models?key=")) {
+            return {
+              ok: true,
+              status: 200,
+              json: async () => ({
+                models: [
+                  { name: "models/gemini-2.5-flash", supportedGenerationMethods: ["generateContent"] },
+                  { name: "models/gemini-3.8-flash", supportedGenerationMethods: ["generateContent"] },
+                ],
+              }),
+            } as any;
+          }
+
+          calledUrl = u;
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              candidates: [{ content: { parts: [{ text: "Gemini 3.8 Flash reply" }] } }],
+            }),
+          } as any;
+        });
+
+        const res = await service.handleMessage("Looking for my water bottle");
+        expect(res.status).toBe("success");
+        expect(res.provider).toBe("gemini");
+        expect(res.model).toBe("gemini-3.8-flash");
+        expect(calledUrl).toContain("gemini-3.8-flash");
+      });
+
+      it("falls back safely to deterministic retrieval if account cannot use gemini-3.8-flash for free (HTTP 429 quota)", async () => {
+        process.env.GEMINI_API_KEY = "test-ai-key-12345";
+        process.env.GEMINI_MODEL = "gemini-3.8-flash";
+
+        vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+          return {
+            ok: false,
+            status: 429,
+            json: async () => ({ error: { message: "Quota exceeded: Free tier limit reached for gemini-3.8-flash" } }),
+          } as any;
+        });
+
+        const res = await service.handleMessage("Looking for my backpack");
+        expect(res.provider).toBe("deterministic-retrieval");
+        expect(res.status).toBe("quota");
+        expect(res.configuredModel).toBe(false);
+        expect(res.reply).toBeDefined();
+        expect(res.note).toContain("HTTP 429");
+      });
     });
   });
 });

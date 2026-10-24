@@ -86,6 +86,32 @@ const SHUTDOWN_MODELS = new Set([
   "gemini-2.0-pro-exp",
 ]);
 
+// Preferred active Flash models in priority order recommended by Google AI documentation
+export const PREFERRED_MODELS_PRIORITY = [
+  "gemini-3.8-flash",
+  "gemini-3.5-flash-lite",
+  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
+];
+
+export function selectBestAvailableModel(availableModels: string[]): string {
+  const validModels = availableModels.filter((m) => !SHUTDOWN_MODELS.has(m));
+  if (validModels.length === 0) return "";
+
+  // 1. Check preferred models in exact priority order (e.g. gemini-3.8-flash, gemini-3.5-flash-lite)
+  for (const preferred of PREFERRED_MODELS_PRIORITY) {
+    const matched = validModels.find((m) => m.toLowerCase() === preferred.toLowerCase());
+    if (matched) return matched;
+  }
+
+  // 2. Prioritize any other Flash model
+  const anyFlash = validModels.find((m) => m.toLowerCase().includes("flash"));
+  if (anyFlash) return anyFlash;
+
+  // 3. Fall back to first valid active model
+  return validModels[0] || "";
+}
+
 export function extractSearchTokens(text: string): string[] {
   return text
     .toLowerCase()
@@ -949,9 +975,8 @@ export class ChatService {
       }
 
       if (discovery.models.length > 0) {
-        // Prioritize active Flash models (which are not shut down)
-        const flashModel = discovery.models.find((m) => m.toLowerCase().includes("flash"));
-        selectedModel = flashModel || discovery.models[0] || "";
+        // Prioritize confirmed active models (gemini-3.8-flash, 3.5-flash-lite, etc.)
+        selectedModel = selectBestAvailableModel(discovery.models);
       } else if (discovery.errorCategory === "unavailable_model") {
         return {
           reply: null,
