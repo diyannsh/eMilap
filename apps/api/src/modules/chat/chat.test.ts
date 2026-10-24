@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ChatService, extractSearchTokens } from "./chat.service";
 import { chatMessageSchema } from "./chat.schemas";
+import { prisma } from "../../db/client";
 
 describe("Chatbot Module Security & Scoping", () => {
   it("extracts clean search tokens without common stop words", () => {
@@ -366,6 +367,16 @@ describe("Chatbot Module Security & Scoping", () => {
       expect(res.configuredModel).toBe(true);
       expect(res.provider).toBe("gemini");
       expect(calledUrl).toContain("gemini-2.0-flash");
+    });
+
+    it("remains resilient and functional even if database connection fails", async () => {
+      delete process.env.GEMINI_API_KEY;
+      vi.spyOn(prisma.community, "findFirst").mockRejectedValue(new Error("Database connection pool timeout"));
+
+      const res = await service.handleMessage("Hi, I lost something. Where can I report it?");
+      expect(res.reply).toContain("[Report Lost](#report-lost)");
+      expect(res.actions?.some((a) => a.view === "report_lost")).toBe(true);
+      expect(res.communityName).toBe("Campus Lost & Found");
     });
   });
 });

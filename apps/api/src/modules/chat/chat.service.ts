@@ -121,16 +121,20 @@ export class ChatService {
 
     // 1. Resolve active campus community
     let community = null;
-    if (communityId) {
-      community = await prisma.community.findFirst({
-        where: { id: communityId, isActive: true },
-      });
-    }
-    if (!community) {
-      community = await prisma.community.findFirst({
-        where: { isActive: true },
-        orderBy: { createdAt: "asc" },
-      });
+    try {
+      if (communityId) {
+        community = await prisma.community.findFirst({
+          where: { id: communityId, isActive: true },
+        });
+      }
+      if (!community) {
+        community = await prisma.community.findFirst({
+          where: { isActive: true },
+          orderBy: { createdAt: "asc" },
+        });
+      }
+    } catch {
+      // Degraded / database offline resilience: keep chat functional with default community
     }
 
     const commId = community?.id || "default-community";
@@ -138,8 +142,10 @@ export class ChatService {
 
     // 2. Fetch community-scoped public reports ONLY
     // SECURITY: Strictly excludes private clues, claim evidence, credentials, and audit logs
-    const publicReports: PublicReportItem[] = community
-      ? await prisma.itemReport.findMany({
+    let publicReports: PublicReportItem[] = [];
+    try {
+      if (community) {
+        publicReports = await prisma.itemReport.findMany({
           where: {
             communityId: community.id,
             status: { not: "REMOVED" },
@@ -159,8 +165,11 @@ export class ChatService {
           },
           orderBy: { createdAt: "desc" },
           take: 60,
-        })
-      : [];
+        });
+      }
+    } catch {
+      // Degraded / database offline resilience: continue with empty reports list
+    }
 
     const lowerMsg = trimmed.toLowerCase();
 
