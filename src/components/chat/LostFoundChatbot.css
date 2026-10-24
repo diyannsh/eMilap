@@ -240,8 +240,13 @@
 }
 
 .emilap-bold-text {
-  font-weight: 700;
-  color: #FAF9F8;
+  font-weight: 700 !important;
+  color: #FAF9F8 !important;
+}
+
+.emilap-italic-text {
+  font-style: italic;
+  opacity: 0.85;
 }
 
 .emilap-message-time {
@@ -354,7 +359,6 @@
   text-align: center;
   user-select: none;
 }
-
 /* ── Input Box & Footer ── */
 .emilap-chat-input-bar {
   padding: 12px 14px;

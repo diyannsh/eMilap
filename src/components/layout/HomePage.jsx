@@ -14,7 +14,7 @@ const DESC = {
   'Ownership Claims': 'Review the private details used to confirm the owner of an item.',
   Updates: 'Find updates related to your lost-and-found reports.',
   Moderation: 'Review reports and ownership claims that may need attention.',
-  'Account Settings': 'Manage your e-Milap account preferences.',
+  'Account Settings': 'Manage your eMilap account preferences.',
 };
 
 const SECTION_IMAGES = {
@@ -115,6 +115,7 @@ export default function HomePage({ items, onSelect, restoreSection = null, onSli
       ScrollTrigger.refresh();
 
       // SYNCHRONOUS PRE-PAINT POSITION RESTORATION:
+      // If returning to a section slide, restore scroll and track transform BEFORE browser paints!
       if (restoreSection && typeof restoreSection.index === 'number' && restoreSection.index >= 0 && !restoreSection.fromHero) {
         const total = Math.max(1, sections.length - 1);
         const progress = Math.min(1, Math.max(0, restoreSection.index / total));
@@ -122,16 +123,20 @@ export default function HomePage({ items, onSelect, restoreSection = null, onSli
         const st = tween.scrollTrigger;
         const targetScroll = Math.round(st.start + totalDist * progress);
 
+        // 1. Instantly apply track transform so there is zero layout jump or flicker
         track.style.transform = `translate3d(${-totalDist * progress}px, 0px, 0px)`;
         tween.progress(progress);
 
+        // 2. Instantly scroll window and Lenis
         window.scrollTo({ top: targetScroll, left: 0, behavior: 'instant' });
         lenis.scrollTo(targetScroll, { immediate: true, force: true });
 
+        // 3. Sync ScrollTrigger state immediately with zero lag
         st.scroll(targetScroll);
         st.progress = progress;
         ScrollTrigger.update();
 
+        // 4. Update visual indicators
         const step = window.matchMedia('(max-width: 700px)').matches ? 23 : 28;
         if (barRef.current) barRef.current.style.transform = `scaleX(${progress})`;
         if (progressFillRef.current) progressFillRef.current.style.transform = `translateX(-50%) scaleY(${progress})`;
@@ -164,14 +169,14 @@ export default function HomePage({ items, onSelect, restoreSection = null, onSli
     <div className="hm" ref={rootRef}>
       <section className="hm-hero">
         <p className="hm-eyebrow hm-fade">Campus Lost &amp; Found</p>
-        <h1 className="hm-title" aria-label="e-Milap">
-          {[...'e-Milap'].map((c, i) => (
+        <h1 className="hm-title" aria-label="eMilap">
+          {[...'eMilap'].map((c, i) => (
             <span className="hm-char-wrap" key={i}><span className="hm-char">{c}</span></span>
           ))}
         </h1>
         <p className="hm-headline hm-fade">Lost something on campus? Let&apos;s get it back to you.</p>
         <p className="hm-lede hm-fade">
-          e-Milap connects people who lost an item with the people who found it. Report it, review possible
+          eMilap connects people who lost an item with the people who found it. Report it, review possible
           matches, and confirm ownership with private details, all in one place.
         </p>
         <div className="hm-cta hm-fade">
@@ -213,6 +218,7 @@ export default function HomePage({ items, onSelect, restoreSection = null, onSli
               className="hm-card"
               key={item.id}
               onMouseDown={(e) => {
+                // Prevent browser focus-scroll algorithm from displacing the transformed carousel on click
                 e.preventDefault();
               }}
               onClick={() => onSelect(item.id, { index: i })}
@@ -231,7 +237,7 @@ export default function HomePage({ items, onSelect, restoreSection = null, onSli
               />
               <span className="hm-card-meta"><span>{String(i + 1).padStart(2, '0')}</span><span>Open →</span></span>
               <span className="hm-card-title">{item.label}</span>
-              <span className="hm-card-desc">{DESC[item.label] ?? 'Use e-Milap to report, find, and return items on campus.'}</span>
+              <span className="hm-card-desc">{DESC[item.label] ?? 'Use eMilap to report, find, and return items on campus.'}</span>
             </button>
           ))}
           <div className="hm-track-end" />

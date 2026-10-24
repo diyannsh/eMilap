@@ -4,16 +4,20 @@ import MochaFlowerBackground from '../canvas/MochaFlowerBackground.jsx';
 import GlassSurface from '../ui/GlassSurface.jsx';
 import AccountAccess from '../account/AccountAccess.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
+import { useMockStore } from '../../data/mockStore.js';
 import { MapPin } from '../../lib/icons.js';
 import './AppShell.css';
 
 export default function AppShell({ activeView, navigationItems, onNavigate, transitioning = false, children }) {
-  const { user, logout, unreadCount = 0 } = useAuth();
   const mainRef = useRef(null);
   const accountMenuRef = useRef(null);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [authMode, setAuthMode] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { user, logout, unreadCount: authUnreadCount } = useAuth();
+  const { notifications } = useMockStore();
+  const mockUnreadCount = notifications.filter((n) => !n.read).length;
+  const unreadCount = authUnreadCount || mockUnreadCount;
   const activeLabel = navigationItems.find((item) => item.id === activeView)?.label ?? 'Sections';
 
   const openAuth = (mode) => {
@@ -64,14 +68,14 @@ export default function AppShell({ activeView, navigationItems, onNavigate, tran
     onNavigate(id);
   };
 
-  // Sections only (no dashboard item) for mobile menu listing
   const sectionItems = navigationItems.filter((item) => item.id !== 'dashboard');
 
   return (
-    <div className="relative min-h-screen w-full bg-[#0E0805] font-sans text-platinum-500" style={{ backgroundColor: '#0E0805' }}>
+    <div className="relative min-h-screen w-full bg-[#0E0805] text-[#E5E4E2]">
       <main
         ref={mainRef}
-        className="app-main relative flex min-h-screen w-full flex-col"
+        tabIndex={-1}
+        className="app-main relative flex min-h-screen w-full flex-col outline-none overflow-x-clip"
       >
         <MochaFlowerBackground activeView={activeView} />
 
@@ -84,11 +88,11 @@ export default function AppShell({ activeView, navigationItems, onNavigate, tran
             type="button"
             onClick={() => onNavigate('dashboard')}
             className="flex items-center gap-3 rounded-xl text-left transition hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#E6E0F0]"
-            aria-label="Go to e-Milap sections"
+            aria-label="Go to eMilap sections"
           >
             <MapPin className="text-[#E6E0F0]" size={25} />
             <span>
-              <span className="block text-xl font-bold leading-none text-[#FAF9F8]">e-Milap</span>
+              <span className="block text-xl font-bold leading-none text-[#FAF9F8]">eMilap</span>
               <span className="mt-1 block text-[10px] font-semibold uppercase tracking-[0.18em] text-[#E5E4E2]/70">Campus Lost &amp; Found</span>
             </span>
           </button>
@@ -114,14 +118,8 @@ export default function AppShell({ activeView, navigationItems, onNavigate, tran
                     <button
                       type="button"
                       onClick={() => {
-                        if (isAccount) {
-                          setAccountMenuOpen((open) => !open);
-                          return;
-                        }
-                        if (selected && item.id === 'dashboard') {
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
-                          return;
-                        }
+                        if (isAccount) { setAccountMenuOpen((o) => !o); return; }
+                        if (selected && item.id === 'dashboard') { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
                         onNavigate(item.id);
                       }}
                       aria-label={item.label}
@@ -133,7 +131,7 @@ export default function AppShell({ activeView, navigationItems, onNavigate, tran
                     >
                       <Icon size={19} strokeWidth={1.8} aria-hidden="true" />
                       {isNotifications && unreadCount > 0 && (
-                        <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-signal-500 px-1 text-[9px] font-bold text-black shadow">
+                        <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#E6E0F0] px-1 text-[9px] font-bold text-black shadow ring-2 ring-[#231713]">
                           {unreadCount > 9 ? '9+' : unreadCount}
                         </span>
                       )}
@@ -187,22 +185,22 @@ export default function AppShell({ activeView, navigationItems, onNavigate, tran
             })}
           </nav>
 
-          {/* Action pill: Back button if in section */}
-          {(activeView !== 'dashboard' || transitioning) && (
-            <button
-              type="button"
-              onClick={() => onNavigate('dashboard')}
-              className="rounded-full border border-[#6F4E37] bg-[#231713]/80 px-4 py-2 text-sm font-medium text-[#FAF9F8] backdrop-blur transition-colors hover:border-[#E6E0F0]/60 hover:bg-[#341F18]"
-            >
-              ← All sections
-              <span className="sr-only"> (current: {activeLabel})</span>
-            </button>
-          )}
-
-          {/* Campus community indicator */}
-          <div className="flex items-center gap-2 rounded-full border border-[#6F4E37]/60 bg-[#231713]/80 px-4 py-2 text-xs font-medium text-[#FAF9F8] backdrop-blur">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-signal-400" />
-            {user?.communityName || 'Campus community'}
+          {/* Right actions */}
+          <div className="flex items-center gap-2">
+            {(activeView !== 'dashboard' || transitioning) && (
+              <button
+                type="button"
+                onClick={() => onNavigate('dashboard')}
+                className="section-nav-back rounded-full border border-[#6F4E37]/50 bg-[#2C1C16]/85 px-4 py-2 text-sm font-medium text-[#E5E4E2] backdrop-blur transition-colors hover:border-[#E6E0F0]/60 hover:bg-[#3D261E]"
+              >
+                ← All sections
+                <span className="sr-only"> (current: {activeLabel})</span>
+              </button>
+            )}
+            <div className="flex items-center gap-2 rounded-full border border-[#6F4E37]/45 bg-[#2C1C16]/85 px-4 py-2 text-xs font-medium text-[#E5E4E2] backdrop-blur">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-[#EAAA00]" />
+              {user?.communityName || 'Campus community'}
+            </div>
           </div>
         </header>
 
@@ -213,39 +211,41 @@ export default function AppShell({ activeView, navigationItems, onNavigate, tran
           {/* Logo */}
           <button
             type="button"
-            onClick={() => { setMobileMenuOpen(false); onNavigate('dashboard'); }}
-            className="flex items-center gap-2.5 rounded-xl text-left transition hover:opacity-80"
-            aria-label="Go home"
+            onClick={() => onNavigate('dashboard')}
+            className="flex items-center gap-2.5 text-left"
+            aria-label="Go to eMilap sections"
           >
             <MapPin className="text-[#E6E0F0]" size={22} />
             <span>
-              <span className="block text-lg font-bold leading-none text-[#FAF9F8]">e-Milap</span>
+              <span className="block text-lg font-bold leading-none text-[#FAF9F8]">eMilap</span>
               <span className="block text-[9px] font-semibold uppercase tracking-[0.18em] text-[#E5E4E2]/65">Campus Lost &amp; Found</span>
             </span>
           </button>
 
-          {/* Right side: back button (in section) + MENU toggle */}
+          {/* Right Side: Back button + Hamburger Menu toggle */}
           <div className="flex items-center gap-2">
-            {(activeView !== 'dashboard' || transitioning) && !mobileMenuOpen && (
+            {activeView !== 'dashboard' && (
               <button
                 type="button"
                 onClick={() => onNavigate('dashboard')}
-                className="rounded-full border border-[#6F4E37]/50 bg-[#2C1C16]/85 px-3 py-1.5 text-xs font-semibold text-[#E5E4E2] backdrop-blur"
+                className="rounded-full border border-[#6F4E37]/60 bg-[#2C1C16]/90 px-3 py-1.5 text-xs font-medium text-[#E5E4E2] backdrop-blur transition-colors hover:border-[#E6E0F0]/60 hover:bg-[#3D261E]"
               >
                 ← Back
               </button>
             )}
             <button
               type="button"
+              className={`mobile-nav-toggle${mobileMenuOpen ? ' is-active' : ''}`}
               onClick={() => setMobileMenuOpen((o) => !o)}
-              className="mobile-menu-toggle"
-              aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+              aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
               aria-expanded={mobileMenuOpen}
             >
-              <span className="mobile-menu-toggle-text">{mobileMenuOpen ? 'CLOSE' : 'MENU'}</span>
-              <span className="mobile-menu-toggle-lines" aria-hidden="true">
-                <span className={mobileMenuOpen ? 'line-1 open' : 'line-1'} />
-                <span className={mobileMenuOpen ? 'line-2 open' : 'line-2'} />
+              <span className="mobile-nav-toggle-text">
+                {mobileMenuOpen ? 'CLOSE' : 'MENU'}
+              </span>
+              <span className="mobile-nav-burger" aria-hidden="true">
+                <span className="mobile-nav-burger-line" />
+                <span className="mobile-nav-burger-line" />
               </span>
             </button>
           </div>
@@ -261,6 +261,7 @@ export default function AppShell({ activeView, navigationItems, onNavigate, tran
           <nav className="mobile-nav-list" aria-label="Mobile navigation">
             {sectionItems.map((item, i) => {
               const isActive = activeView === item.id;
+              const isNotifications = item.id === 'notifications';
               return (
                 <button
                   key={item.id}
@@ -272,7 +273,7 @@ export default function AppShell({ activeView, navigationItems, onNavigate, tran
                   <span className="mobile-nav-num">{String(i + 1).padStart(2, '0')}</span>
                   <span className="mobile-nav-label inline-flex items-center gap-2">
                     {item.label}
-                    {item.id === 'notifications' && unreadCount > 0 && (
+                    {isNotifications && unreadCount > 0 && (
                       <span className="px-2 py-0.5 text-[10px] bg-[#E6E0F0]/25 text-[#E6E0F0] border border-[#E6E0F0]/40 rounded-full font-bold">
                         {unreadCount} new
                       </span>
@@ -287,11 +288,11 @@ export default function AppShell({ activeView, navigationItems, onNavigate, tran
           <div className="pt-4 border-t border-[#6F4E37]/30 flex flex-col gap-2">
             {user ? (
               <div className="flex items-center justify-between text-xs py-2 px-1 text-[#E5E4E2]">
-                <span className="truncate">{user.displayName || user.email}</span>
+                <span className="truncate font-semibold">{user.displayName || user.email}</span>
                 <button
                   type="button"
                   onClick={() => { setMobileMenuOpen(false); logout(); }}
-                  className="text-signal-400 font-semibold px-2 py-1 rounded bg-[#6F4E37]/20 border border-[#6F4E37]/40"
+                  className="text-[#C68B59] hover:underline font-semibold px-2.5 py-1 rounded bg-[#6F4E37]/20 border border-[#6F4E37]/40"
                 >
                   Sign out
                 </button>
@@ -319,7 +320,7 @@ export default function AppShell({ activeView, navigationItems, onNavigate, tran
           {/* Footer strip */}
           <div className="mobile-nav-footer mt-4">
             <div className="flex items-center gap-2">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-signal-400" />
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#EAAA00]" />
               <span className="text-xs font-medium text-[#E5E4E2]/70 uppercase tracking-widest">
                 {user?.communityName || 'Campus community'}
               </span>

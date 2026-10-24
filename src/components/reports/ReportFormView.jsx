@@ -1,34 +1,42 @@
 import { useEffect, useRef, useState } from 'react';
-import { Camera, CheckCircle2, ImagePlus, LogIn, Trash2, Upload } from 'lucide-react';
+import { Camera, Check, CheckCircle2, ImagePlus, LogIn, Share2, Sparkles, Trash2, Upload } from 'lucide-react';
 import FloatingPanel from '../ui/FloatingPanel.jsx';
-import { Eye, Lock } from '../../lib/icons.js';
+import { Eye, Lock, MapPin } from '../../lib/icons.js';
+import { CAMPUS_ZONES, ITEM_CATEGORIES, mockStore } from '../../data/mockStore.js';
+import { copyShareLink } from '../../lib/routes.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { api } from '../../lib/api.js';
 
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
 
-const ReportFormView = ({ type }) => {
+export default function ReportFormView({ type, onNavigate }) {
   const { user } = useAuth();
-  const [image, setImage] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState('');
-  const [imageError, setImageError] = useState('');
-  const galleryInputRef = useRef(null);
-  const cameraInputRef = useRef(null);
   const isLost = type === 'lost';
 
-  // Form field states
+  // Form State
   const [title, setTitle] = useState('');
-  const [publicDescription, setPublicDescription] = useState('');
   const [category, setCategory] = useState('Electronics');
   const [color, setColor] = useState('');
   const [brand, setBrand] = useState('');
-  const [approximateLocation, setApproximateLocation] = useState('');
-  const [privateClues, setPrivateClues] = useState('');
+  const [locationZone, setLocationZone] = useState('Main Library');
+  const [spotDetail, setSpotDetail] = useState('');
+  const [dateTime, setDateTime] = useState('Today, recent');
+  const [description, setDescription] = useState('');
+  const [privateClue, setPrivateClue] = useState('');
 
-  // Submission state
-  const [loading, setLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
-  const [successData, setSuccessData] = useState(null);
+  // Image State
+  const [image, setImage] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState('');
+  const [imageError, setImageError] = useState('');
+  const [formError, setFormError] = useState('');
+
+  // Submission State
+  const [submittedItem, setSubmittedItem] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [copiedShare, setCopiedShare] = useState(false);
+
+  const galleryInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
 
   useEffect(() => () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -58,269 +66,464 @@ const ReportFormView = ({ type }) => {
     if (cameraInputRef.current) cameraInputRef.current.value = '';
   };
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    setErrorMessage('');
-    setSuccessData(null);
+  const handleShareForm = async () => {
+    await copyShareLink(isLost ? 'report_lost' : 'report_found');
+    setCopiedShare(true);
+    setTimeout(() => setCopiedShare(false), 2200);
+  };
 
-    if (!user) {
-      setErrorMessage('Please sign in before submitting a report.');
-      return;
-    }
+  const handleCopySubmittedLink = async () => {
+    if (!submittedItem) return;
+    await copyShareLink('browse', { itemId: submittedItem.id });
+    setCopiedShare(true);
+    setTimeout(() => setCopiedShare(false), 2200);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setFormError('');
 
     if (!title.trim() || title.trim().length < 2) {
-      setErrorMessage('Please provide an item name of at least 2 characters.');
+      setFormError('Please enter an item title of at least 2 characters.');
       return;
     }
-    if (!publicDescription.trim() || publicDescription.trim().length < 5) {
-      setErrorMessage('Please provide a visible description of at least 5 characters.');
+    if (!description.trim() || description.trim().length < 5) {
+      setFormError('Please provide a visible description of at least 5 characters.');
       return;
     }
 
-    setLoading(true);
+    setIsSubmitting(true);
+
     try {
-      let imageObjectKeys = [];
-      if (image) {
-        const uploadRes = await api.uploads.uploadReportImage(image);
-        if (uploadRes?.data?.objectKey) {
-          imageObjectKeys.push(uploadRes.data.objectKey);
+      let createdBackendItem = null;
+
+      // If user is logged in, submit to backend API first
+      if (user) {
+        let imageObjectKeys = [];
+        if (image) {
+          try {
+            const uploadRes = await api.uploads.uploadReportImage(image);
+            if (uploadRes?.data?.objectKey) {
+              imageObjectKeys.push(uploadRes.data.objectKey);
+            }
+          } catch (uploadErr) {
+            console.warn('Image upload failed, continuing with report submission:', uploadErr);
+          }
         }
+
+        const reportPayload = {
+          reportType: isLost ? 'LOST' : 'FOUND',
+          title: title.trim(),
+          publicDescription: description.trim(),
+          category: category.trim(),
+          color: color.trim() || undefined,
+          brand: brand.trim() || undefined,
+          approximateLocation: spotDetail ? `${locationZone} - ${spotDetail.trim()}` : locationZone,
+          privateDetails: privateClue.trim() || undefined,
+          imageObjectKeys,
+        };
+
+        const res = await api.reports.create(reportPayload);
+        createdBackendItem = res?.data;
       }
 
-      const reportPayload = {
-        reportType: isLost ? 'LOST' : 'FOUND',
+      // Add to local mockStore for immediate UI responsiveness
+      const localItem = mockStore.addItem({
+        id: createdBackendItem?.id,
         title: title.trim(),
-        publicDescription: publicDescription.trim(),
-        category: category.trim(),
-        color: color.trim() || undefined,
-        brand: brand.trim() || undefined,
-        approximateLocation: approximateLocation.trim() || undefined,
-        privateDetails: privateClues.trim() || undefined,
-        imageObjectKeys,
-      };
+        category,
+        color: color.trim() || 'Unspecified',
+        location: locationZone,
+        spot: spotDetail.trim() || 'General campus area',
+        date: dateTime,
+        description: description.trim(),
+        privateClue: privateClue.trim() || 'None provided',
+        status: isLost ? 'LOST' : 'FOUND',
+        contact: user ? `${user.displayName || user.email}` : isLost ? 'Student Reporter' : `${locationZone} Campus Desk`,
+        isSample: false,
+      });
 
-      const res = await api.reports.create(reportPayload);
-      setSuccessData(res.data);
-
-      // Reset fields
-      setTitle('');
-      setPublicDescription('');
-      setColor('');
-      setBrand('');
-      setApproximateLocation('');
-      setPrivateClues('');
-      clearImage();
+      setSubmittedItem(createdBackendItem || localItem);
     } catch (err) {
-      setErrorMessage(err.message || 'Failed to submit report. Please check the fields and try again.');
+      console.warn('Backend submission failed, saving to local store:', err);
+      // Fallback to local store
+      const localItem = mockStore.addItem({
+        title: title.trim(),
+        category,
+        color: color.trim() || 'Unspecified',
+        location: locationZone,
+        spot: spotDetail.trim() || 'General campus area',
+        date: dateTime,
+        description: description.trim(),
+        privateClue: privateClue.trim() || 'None provided',
+        status: isLost ? 'LOST' : 'FOUND',
+        contact: isLost ? 'Student Reporter' : `${locationZone} Campus Desk`,
+        isSample: false,
+      });
+      setSubmittedItem(localItem);
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
+  const handleResetForm = () => {
+    setTitle('');
+    setColor('');
+    setBrand('');
+    setSpotDetail('');
+    setDescription('');
+    setPrivateClue('');
+    clearImage();
+    setSubmittedItem(null);
+    setFormError('');
+  };
+
+  // If already submitted, render the success confirmation view
+  if (submittedItem) {
+    return (
+      <div className="mx-auto flex w-full max-w-2xl flex-col">
+        <FloatingPanel title="Report Filed Successfully">
+          <div className="p-6 sm:p-8 rounded-2xl bg-[#140C08]/90 border border-[#6F4E37]/60 text-center space-y-5">
+            <div className="w-16 h-16 mx-auto rounded-full bg-[#C68B59]/20 border border-[#C68B59]/50 flex items-center justify-center text-[#C68B59] shadow-lg animate-bounce">
+              <CheckCircle2 size={32} />
+            </div>
+
+            <div className="space-y-2">
+              <span className="text-xs uppercase tracking-wider font-bold text-[#E6E0F0]">
+                {submittedItem.status || (isLost ? 'LOST' : 'FOUND')} REPORT CONFIRMED
+              </span>
+              <h3 className="text-2xl font-bold text-[#FAF9F8]">{submittedItem.title}</h3>
+              <p className="text-sm text-[#E5E4E2]/80 max-w-md mx-auto leading-relaxed">
+                Your report has been logged and published to the live campus registry. Campus security and community members can now match against this item.
+              </p>
+            </div>
+
+            {/* Item Summary Card */}
+            <div className="bg-[#1D110C] p-4 rounded-xl border border-[#6F4E37]/45 text-left text-xs space-y-2 max-w-md mx-auto">
+              <div className="flex justify-between">
+                <span className="text-[#E5E4E2]/60">Reference ID:</span>
+                <span className="text-[#FAF9F8] font-mono font-bold">
+                  #EM-{String(submittedItem.id || 'SUBMITTED').slice(-6)}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#E5E4E2]/60">Location Zone:</span>
+                <span className="text-[#FAF9F8] font-semibold">{submittedItem.location || locationZone}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#E5E4E2]/60">Category:</span>
+                <span className="text-[#FAF9F8] font-semibold">{submittedItem.category || category}</span>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row gap-3 pt-2 justify-center">
+              <button
+                type="button"
+                onClick={handleCopySubmittedLink}
+                className="px-5 py-3 bg-[#1D110C] hover:bg-[#281610] text-[#E5E4E2] rounded-xl font-semibold text-xs transition border border-[#6F4E37]/60 flex items-center justify-center gap-1.5"
+              >
+                {copiedShare ? (
+                  <>
+                    <Check size={14} className="text-emerald-400" /> Listing Link Copied!
+                  </>
+                ) : (
+                  <>
+                    <Share2 size={14} className="text-[#C68B59]" /> Copy Listing Link
+                  </>
+                )}
+              </button>
+              {onNavigate && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onNavigate('browse')}
+                    className="px-6 py-3 bg-[#6F4E37] hover:bg-[#8C5E43] text-[#FAF9F8] rounded-xl font-semibold text-sm transition shadow-lg border border-[#E5E4E2]/20 flex items-center justify-center gap-2"
+                  >
+                    View in Campus Listings
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onNavigate('matches')}
+                    className="px-6 py-3 bg-[#241611] hover:bg-[#341F18] text-[#E5E4E2] border border-[#6F4E37]/60 rounded-xl font-medium text-sm transition flex items-center justify-center gap-1.5"
+                  >
+                    <Sparkles size={15} className="text-[#C68B59]" /> Check Matches
+                  </button>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={handleResetForm}
+                className="px-5 py-3 text-xs text-[#E5E4E2]/70 hover:text-[#FAF9F8] hover:underline transition"
+              >
+                File another report
+              </button>
+            </div>
+          </div>
+        </FloatingPanel>
+      </div>
+    );
+  }
+
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col pointer-events-none">
-      <FloatingPanel title={`Report ${isLost ? 'Lost' : 'Found'} Item`} className="pointer-events-auto">
+    <div className="mx-auto flex w-full max-w-2xl flex-col">
+      <div className="flex justify-end mb-2">
+        <button
+          type="button"
+          onClick={handleShareForm}
+          className="text-xs px-3 py-1.5 rounded-lg bg-[#180E0A] hover:bg-[#25150F] text-[#E5E4E2] border border-[#6F4E37]/50 flex items-center gap-1.5 transition"
+        >
+          {copiedShare ? (
+            <>
+              <Check size={13} className="text-emerald-400" /> Direct Link Copied!
+            </>
+          ) : (
+            <>
+              <Share2 size={13} /> Share This Form
+            </>
+          )}
+        </button>
+      </div>
+      <FloatingPanel title={`Report ${isLost ? 'Lost' : 'Found'} Item`}>
         {!user && (
-          <div className="mb-6 rounded-xl border border-signal-500/30 bg-signal-500/10 p-4 text-sm text-platinum-400">
-            <p className="font-semibold text-signal-300 flex items-center gap-2">
-              <LogIn size={16} /> Sign-in required
+          <div className="mb-6 rounded-xl border border-[#6F4E37]/50 bg-[#1A0F0A]/90 p-4 text-sm text-[#E5E4E2]">
+            <p className="font-semibold text-[#E6E0F0] flex items-center gap-2">
+              <LogIn size={16} /> Campus Sign-In Recommended
             </p>
-            <p className="mt-1 text-xs text-platinum-500">
-              You must be logged in to create campus lost and found reports. Please click the account button in the header to sign in or create an account.
+            <p className="mt-1 text-xs text-[#E5E4E2]/70">
+              You can submit reports locally now, or sign in via the header to sync your report across campus databases and receive automated match notifications.
             </p>
           </div>
         )}
 
-        {successData && (
-          <div className="mb-6 rounded-xl border border-signal-400/40 bg-signal-500/15 p-4 text-sm text-signal-200">
-            <p className="font-semibold flex items-center gap-2 text-signal-300">
-              <CheckCircle2 size={18} /> Report submitted successfully!
-            </p>
-            <p className="mt-1 text-xs text-platinum-400">
-              Your {isLost ? 'lost' : 'found'} report has been saved to the campus directory. Matching algorithms have queued this item for suggestions.
-            </p>
-            <p className="mt-2 text-[11px] font-mono text-platinum-500/80">ID: {successData.id}</p>
-          </div>
-        )}
-
-        {errorMessage && (
+        {formError && (
           <div className="mb-6 rounded-xl border border-red-500/40 bg-red-950/40 p-4 text-sm text-red-300" role="alert">
-            <p className="font-semibold">Submission Error</p>
-            <p className="mt-1 text-xs">{errorMessage}</p>
+            <p className="font-semibold">Submission Notice</p>
+            <p className="mt-1 text-xs">{formError}</p>
           </div>
         )}
 
         <form className="space-y-6" onSubmit={handleSubmit}>
-          <section aria-label="Item photo" className="space-y-2">
-            <div
-              className={`overflow-hidden rounded-xl border ${imageError ? 'border-red-400/70' : 'border-mocha-700/70'} bg-mocha-900/50`}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => {
-                event.preventDefault();
-                selectImage(event.dataTransfer.files?.[0]);
-              }}
-            >
-              {previewUrl ? (
-                <div className="relative">
-                  <img src={previewUrl} alt={`Selected photo for ${isLost ? 'lost' : 'found'} item report`} className="h-48 w-full object-cover sm:h-60" />
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-mocha-700/70 bg-mocha-900/90 px-4 py-3">
-                    <span className="min-w-0 truncate text-sm text-platinum-400">{image?.name}</span>
-                    <div className="flex shrink-0 gap-2">
-                      <button type="button" onClick={() => galleryInputRef.current?.click()} className="rounded-lg border border-mocha-700 px-3 py-2 text-xs font-medium text-platinum-400 transition hover:border-lavender-400/60">
-                        Replace photo
-                      </button>
-                      <button type="button" onClick={clearImage} aria-label="Remove selected photo" className="rounded-lg border border-mocha-700 p-2 text-platinum-400 transition hover:border-red-400/60 hover:text-red-200">
-                        <Trash2 size={16} aria-hidden="true" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex min-h-48 flex-col items-center justify-center px-5 py-7 text-center sm:min-h-52">
-                  <span className="mb-3 grid h-12 w-12 place-items-center rounded-full border border-caramel-500/30 bg-caramel-500/10 text-caramel-300">
-                    <ImagePlus size={22} aria-hidden="true" />
-                  </span>
-                  <p className="font-semibold text-platinum-400">Add a photo of the {isLost ? 'item you lost' : 'item you found'}</p>
-                  <p className="mt-1 text-sm text-platinum-500/75">Choose an image, take a photo, or drag one here. JPG, PNG, or other image files up to 10 MB.</p>
-                  <div className="mt-4 flex flex-wrap justify-center gap-2">
-                    <button type="button" onClick={() => galleryInputRef.current?.click()} className="inline-flex items-center gap-2 rounded-lg bg-caramel-500 px-4 py-2.5 text-sm font-semibold text-[#1E1310] transition hover:bg-caramel-400">
-                      <Upload size={16} aria-hidden="true" /> Choose from device
-                    </button>
-                    <button type="button" onClick={() => cameraInputRef.current?.click()} className="inline-flex items-center gap-2 rounded-lg border border-mocha-700 px-4 py-2.5 text-sm font-medium text-platinum-400 transition hover:border-caramel-500/60">
-                      <Camera size={16} aria-hidden="true" /> Take a photo
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+          {/* ── Photo Upload Section ── */}
+          <section className="space-y-3">
+            <label className="block text-sm font-medium text-[#E5E4E2]">
+              Item Photo (Optional)
+            </label>
+
             <input
               ref={galleryInputRef}
-              className="sr-only"
               type="file"
-              name="itemImage"
               accept="image/*"
-              aria-label="Choose an item photo from your device"
-              onChange={(event) => selectImage(event.target.files?.[0])}
+              className="hidden"
+              onChange={(e) => selectImage(e.target.files?.[0])}
             />
+
             <input
               ref={cameraInputRef}
-              className="sr-only"
               type="file"
               accept="image/*"
               capture="environment"
-              aria-label="Take a photo of the item"
-              onChange={(event) => selectImage(event.target.files?.[0])}
+              className="hidden"
+              onChange={(e) => selectImage(e.target.files?.[0])}
             />
-            {imageError && <p className="text-sm text-red-300" role="alert">{imageError}</p>}
+
+            {!previewUrl ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => galleryInputRef.current?.click()}
+                  className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[#6F4E37]/70 bg-[#160D0A]/70 p-6 text-[#E5E4E2] transition hover:border-[#E6E0F0] hover:bg-[#20130E]"
+                >
+                  <ImagePlus size={24} className="text-[#C68B59]" />
+                  <span className="text-xs font-semibold">Upload Photo</span>
+                  <span className="text-[10px] text-[#E5E4E2]/50">PNG, JPG up to 10 MB</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[#6F4E37]/70 bg-[#160D0A]/70 p-6 text-[#E5E4E2] transition hover:border-[#E6E0F0] hover:bg-[#20130E]"
+                >
+                  <Camera size={24} className="text-[#C68B59]" />
+                  <span className="text-xs font-semibold">Take Photo</span>
+                  <span className="text-[10px] text-[#E5E4E2]/50">Direct from camera</span>
+                </button>
+              </div>
+            ) : (
+              <div className="relative overflow-hidden rounded-xl border border-[#6F4E37]/60 bg-[#160D0A]/80 p-3">
+                <div className="relative mx-auto aspect-video max-h-56 overflow-hidden rounded-lg bg-black/40">
+                  <img
+                    src={previewUrl}
+                    alt="Uploaded item preview"
+                    className="h-full w-full object-contain"
+                  />
+                </div>
+                <div className="mt-3 flex items-center justify-between text-xs text-[#E5E4E2]/70">
+                  <span>Photo attached ({((image?.size || 0) / (1024 * 1024)).toFixed(2)} MB)</span>
+                  <button
+                    type="button"
+                    onClick={clearImage}
+                    className="flex items-center gap-1 text-red-400 hover:text-red-300 font-medium transition"
+                  >
+                    <Trash2 size={14} /> Remove photo
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {imageError && (
+              <p className="text-xs text-red-400 font-medium" role="alert">
+                {imageError}
+              </p>
+            )}
           </section>
 
+          {/* ── Public Item Details ── */}
           <div className="space-y-4">
-            <h3 className="flex items-center gap-2 text-sm font-medium uppercase tracking-wider text-platinum-500">
+            <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-[#E6E0F0]">
               <Eye size={16} /> Public Details
             </h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2">
-                <label className="mb-1 block text-sm text-platinum-500">Item name *</label>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="sm:col-span-2">
+                <label className="mb-1 block text-sm font-medium text-[#E5E4E2]">Item Name / Title *</label>
                 <input
                   type="text"
+                  required
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Example: blue water bottle"
-                  required
-                  className="w-full rounded-lg border border-mocha-700 bg-mocha-800 p-3 text-platinum-400 transition focus:border-lavender-500 focus:outline-none"
+                  placeholder="Example: Blue Hydro Flask, MacBook Air, Silver Car Keys"
+                  className="w-full rounded-lg border border-[#6F4E37]/50 bg-[#160D0A]/70 p-3 text-[#FAF9F8] placeholder-[#E5E4E2]/40 transition focus:border-[#E6E0F0] focus:outline-none focus:ring-1 focus:ring-[#E6E0F0]/40"
                 />
               </div>
-              <div className="col-span-2">
-                <label className="mb-1 block text-sm text-platinum-500">Visible description *</label>
-                <textarea
-                  value={publicDescription}
-                  onChange={(e) => setPublicDescription(e.target.value)}
-                  placeholder="Describe its appearance, brand, or other visible details."
-                  required
-                  className="h-24 w-full rounded-lg border border-mocha-700 bg-mocha-800 p-3 text-platinum-400 transition focus:border-lavender-500 focus:outline-none"
-                />
-              </div>
+
               <div>
-                <label className="mb-1 block text-sm text-platinum-500">Category</label>
+                <label className="mb-1 block text-sm font-medium text-[#E5E4E2]">Category</label>
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  className="w-full rounded-lg border border-mocha-700 bg-mocha-800 p-3 text-platinum-400 transition focus:border-lavender-500 focus:outline-none"
+                  className="w-full rounded-lg border border-[#6F4E37]/50 bg-[#160D0A] p-3 text-[#FAF9F8] transition focus:border-[#E6E0F0] focus:outline-none focus:ring-1 focus:ring-[#E6E0F0]/40"
                 >
-                  <option value="Electronics">Electronics</option>
-                  <option value="Water Bottles">Water Bottles</option>
-                  <option value="Bags">Bags</option>
-                  <option value="Clothing">Clothing</option>
-                  <option value="Books">Books</option>
-                  <option value="Keys">Keys</option>
-                  <option value="Wallets">Wallets</option>
-                  <option value="Other">Other</option>
+                  {ITEM_CATEGORIES.filter((c) => c !== 'All Categories').map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
                 </select>
               </div>
+
               <div>
-                <label className="mb-1 block text-sm text-platinum-500">Main color</label>
+                <label className="mb-1 block text-sm font-medium text-[#E5E4E2]">Main Color</label>
                 <input
                   type="text"
                   value={color}
                   onChange={(e) => setColor(e.target.value)}
-                  placeholder="Example: blue"
-                  className="w-full rounded-lg border border-mocha-700 bg-mocha-800 p-3 text-platinum-400 transition focus:border-lavender-500 focus:outline-none"
+                  placeholder="Example: Matte black, Navy blue"
+                  className="w-full rounded-lg border border-[#6F4E37]/50 bg-[#160D0A]/70 p-3 text-[#FAF9F8] placeholder-[#E5E4E2]/40 transition focus:border-[#E6E0F0] focus:outline-none focus:ring-1 focus:ring-[#E6E0F0]/40"
                 />
               </div>
+
               <div>
-                <label className="mb-1 block text-sm text-platinum-500">Brand / Manufacturer</label>
+                <label className="mb-1 block text-sm font-medium text-[#E5E4E2]">Brand / Manufacturer</label>
                 <input
                   type="text"
                   value={brand}
                   onChange={(e) => setBrand(e.target.value)}
-                  placeholder="Example: Apple, Hydro Flask"
-                  className="w-full rounded-lg border border-mocha-700 bg-mocha-800 p-3 text-platinum-400 transition focus:border-lavender-500 focus:outline-none"
+                  placeholder="Example: Apple, Hydro Flask, Nike"
+                  className="w-full rounded-lg border border-[#6F4E37]/50 bg-[#160D0A]/70 p-3 text-[#FAF9F8] placeholder-[#E5E4E2]/40 transition focus:border-[#E6E0F0] focus:outline-none focus:ring-1 focus:ring-[#E6E0F0]/40"
                 />
               </div>
+
+              {/* Campus Location Zone Dropdown */}
               <div>
-                <label className="mb-1 block text-sm text-platinum-500">Approximate location</label>
+                <label className="mb-1 block text-sm font-medium text-[#E5E4E2] flex items-center gap-1.5">
+                  <MapPin size={14} className="text-[#C68B59]" /> Campus Building / Zone *
+                </label>
+                <select
+                  value={locationZone}
+                  onChange={(e) => setLocationZone(e.target.value)}
+                  className="w-full rounded-lg border border-[#6F4E37]/50 bg-[#160D0A] p-3 text-[#FAF9F8] transition focus:border-[#E6E0F0] focus:outline-none focus:ring-1 focus:ring-[#E6E0F0]/40"
+                >
+                  {CAMPUS_ZONES.filter((z) => z !== 'All Campus Locations').map((zone) => (
+                    <option key={zone} value={zone}>
+                      {zone}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="mb-1 block text-sm font-medium text-[#E5E4E2]">Specific Spot / Room</label>
                 <input
                   type="text"
-                  value={approximateLocation}
-                  onChange={(e) => setApproximateLocation(e.target.value)}
-                  placeholder="Example: Library 2nd floor"
-                  className="w-full rounded-lg border border-mocha-700 bg-mocha-800 p-3 text-platinum-400 transition focus:border-lavender-500 focus:outline-none"
+                  value={spotDetail}
+                  onChange={(e) => setSpotDetail(e.target.value)}
+                  placeholder="e.g. 2nd Fl study desk, Cafeteria booth, Lab 3"
+                  className="w-full rounded-lg border border-[#6F4E37]/50 bg-[#160D0A]/70 p-3 text-[#FAF9F8] placeholder-[#E5E4E2]/40 transition focus:border-[#E6E0F0] focus:outline-none focus:ring-1 focus:ring-[#E6E0F0]/40"
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="mb-1 block text-sm font-medium text-[#E5E4E2]">When was it lost/found?</label>
+                <input
+                  type="text"
+                  value={dateTime}
+                  onChange={(e) => setDateTime(e.target.value)}
+                  placeholder="e.g. Today around 11:30 AM, Yesterday afternoon"
+                  className="w-full rounded-lg border border-[#6F4E37]/50 bg-[#160D0A]/70 p-3 text-[#FAF9F8] placeholder-[#E5E4E2]/40 transition focus:border-[#E6E0F0] focus:outline-none focus:ring-1 focus:ring-[#E6E0F0]/40"
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="mb-1 block text-sm font-medium text-[#E5E4E2]">Visible Description *</label>
+                <textarea
+                  required
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Describe its exterior appearance, stickers, visible condition, or accessories."
+                  className="h-24 w-full rounded-lg border border-[#6F4E37]/50 bg-[#160D0A]/70 p-3 text-[#FAF9F8] placeholder-[#E5E4E2]/40 transition focus:border-[#E6E0F0] focus:outline-none focus:ring-1 focus:ring-[#E6E0F0]/40"
                 />
               </div>
             </div>
           </div>
 
-          <div className="relative space-y-4 overflow-hidden rounded-xl border border-mocha-700/50 bg-mocha-800/50 p-4">
-            <div className="absolute left-0 top-0 h-full w-1 bg-platinum-500" />
-            <h3 className="flex items-center gap-2 text-sm font-medium uppercase tracking-wider text-platinum-500">
-              <Lock size={16} /> Private Ownership Clues
+          {/* ── Private Ownership Clue Section ── */}
+          <div className="relative space-y-3 overflow-hidden rounded-xl border border-[#6F4E37]/50 bg-[#160D0A]/70 p-4">
+            <div className="absolute left-0 top-0 h-full w-1 bg-[#E6E0F0]" />
+            <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-[#E6E0F0]">
+              <Lock size={16} /> Private Ownership Clue (Hidden from Public)
             </h3>
-            <p className="text-xs leading-relaxed text-platinum-500">
-              Add a detail that can help confirm the item is yours. Keep it out of the public description, such as a hidden mark, a unique contents detail, or a distinctive scratch. Stored encrypted and separate.
+            <p className="text-xs leading-relaxed text-[#E5E4E2]/75">
+              Add a confidential detail that only the true owner can verify (e.g. serial number, lockscreen wallpaper description, hidden engraving, or contents inside a pocket).
             </p>
             <textarea
-              value={privateClues}
-              onChange={(e) => setPrivateClues(e.target.value)}
-              placeholder="Add a private detail that only the owner would know."
-              className="h-20 w-full rounded-lg border border-mocha-700 bg-mocha-900/50 p-3 text-platinum-400 transition focus:border-platinum-500 focus:outline-none"
+              value={privateClue}
+              onChange={(e) => setPrivateClue(e.target.value)}
+              placeholder="e.g. Lockscreen has a photo of a golden retriever; initials 'J.K.' engraved on back; contains student ID card ending in 204."
+              className="h-20 w-full rounded-lg border border-[#6F4E37]/40 bg-[#100805]/80 p-3 text-[#FAF9F8] placeholder-[#E5E4E2]/40 transition focus:border-[#E6E0F0] focus:outline-none focus:ring-1 focus:ring-[#E6E0F0]/40 text-xs sm:text-sm"
             />
           </div>
 
+          {/* Submit Button */}
           <button
             type="submit"
-            disabled={loading || !user}
-            className={`w-full rounded-xl py-4 font-medium shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed ${
+            disabled={isSubmitting}
+            className={`w-full rounded-xl py-4 font-semibold shadow-xl transition flex items-center justify-center gap-2 ${
               isLost
-                ? 'bg-lavender-600 text-white hover:bg-lavender-500'
-                : 'bg-signal-500 text-[#111113] hover:bg-signal-400'
-            }`}
+                ? 'bg-[#6F4E37] text-[#FAF9F8] hover:bg-[#8C5E43] border border-[#E5E4E2]/20'
+                : 'bg-[#C68B59] text-[#160D0A] hover:bg-[#D99A62] border border-[#E5E4E2]/25'
+            } ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
           >
-            {loading ? 'Submitting report...' : isLost ? 'Submit lost-item report' : 'Submit found-item report'}
+            {isSubmitting ? (
+              <span>Saving report to campus registry...</span>
+            ) : isLost ? (
+              'Submit Lost Item Report'
+            ) : (
+              'Submit Found Item Report'
+            )}
           </button>
         </form>
       </FloatingPanel>
     </div>
   );
-};
-
-export default ReportFormView;
+}

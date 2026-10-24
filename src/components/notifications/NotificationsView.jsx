@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import FloatingPanel from '../ui/FloatingPanel.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
+import { useMockStore } from '../../data/mockStore.js';
 import { api } from '../../lib/api.js';
 import {
   Bell,
@@ -12,25 +13,29 @@ import {
   FileSearch,
   Inbox,
   Lock,
+  Shield,
   Sparkles,
+  Trash2,
 } from 'lucide-react';
 
 export default function NotificationsView({ onNavigate }) {
   const { user, setUnreadCount } = useAuth();
-  const [notifications, setNotifications] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const mock = useMockStore();
+  const [apiNotifications, setApiNotifications] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('ALL'); // 'ALL' | 'UNREAD' | 'MATCHES' | 'CLAIMS' | 'SYSTEM'
 
   const fetchNotifications = async () => {
+    if (!user) return;
     setLoading(true);
     try {
       const res = await api.notifications.list();
       const list = res.data || [];
-      setNotifications(list);
+      setApiNotifications(list);
       const unread = list.filter((n) => !n.readAt).length;
       if (setUnreadCount) setUnreadCount(unread);
     } catch {
-      setNotifications([]);
+      setApiNotifications([]);
     } finally {
       setLoading(false);
     }
@@ -40,55 +45,66 @@ export default function NotificationsView({ onNavigate }) {
     if (user) {
       fetchNotifications();
     } else {
-      setLoading(false);
-      setNotifications([]);
+      setApiNotifications([]);
     }
   }, [user]);
 
   const handleMarkRead = async (id) => {
-    try {
-      await api.notifications.markRead(id);
-      setNotifications((curr) =>
-        curr.map((n) => (n.id === id ? { ...n, readAt: new Date().toISOString() } : n))
-      );
-      if (setUnreadCount) setUnreadCount((c) => Math.max(0, c - 1));
-    } catch (err) {
-      console.error('Failed to mark notification read:', err);
+    if (user) {
+      try {
+        await api.notifications.markRead(id);
+        setApiNotifications((curr) =>
+          curr.map((n) => (n.id === id ? { ...n, readAt: new Date().toISOString() } : n))
+        );
+        if (setUnreadCount) setUnreadCount((c) => Math.max(0, c - 1));
+      } catch (err) {
+        console.error('Failed to mark notification read:', err);
+      }
     }
+    mock.markNotificationRead(id);
   };
 
   const handleMarkAllRead = async () => {
-    try {
-      await api.notifications.markAllRead();
-      setNotifications((curr) =>
-        curr.map((n) => ({ ...n, readAt: new Date().toISOString() }))
-      );
-      if (setUnreadCount) setUnreadCount(0);
-    } catch (err) {
-      console.error('Failed to mark all notifications read:', err);
+    if (user) {
+      try {
+        await api.notifications.markAllRead();
+        setApiNotifications((curr) =>
+          curr.map((n) => ({ ...n, readAt: new Date().toISOString() }))
+        );
+        if (setUnreadCount) setUnreadCount(0);
+      } catch (err) {
+        console.error('Failed to mark all read:', err);
+      }
+    }
+    mock.markAllNotificationsRead();
+  };
+
+  const handleAction = (item) => {
+    handleMarkRead(item.id);
+    if (item.linkView && onNavigate) {
+      onNavigate(item.linkView);
     }
   };
 
-  // Helper to extract normalized display properties from a notification
+  // Helper to extract normalized display properties
   const parseNotification = (item) => {
     const payload = item.payload && typeof item.payload === 'object' ? item.payload : {};
-    const kind = (item.kind || payload.type || 'system').toLowerCase();
+    const kind = (item.kind || payload.type || item.type || 'system').toLowerCase();
     const title = payload.title || item.title || (kind.includes('match') ? 'Potential Item Match' : kind.includes('claim') ? 'Claim Status Update' : 'Campus Notification');
-    const message = payload.message || item.message || payload.description || 'You have an update regarding your lost and found activities on e-Milap.';
-    const isRead = Boolean(item.readAt);
-    const createdAt = item.createdAt ? new Date(item.createdAt) : new Date();
-    const timeFormatted = createdAt.toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const message = payload.message || item.message || payload.description || 'You have an update regarding your lost and found activities on eMilap.';
+    const isRead = Boolean(item.readAt || item.read);
+    const timeFormatted = item.time || (item.createdAt ? new Date(item.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Recent');
 
-    let linkView = null;
+    let linkView = item.linkView || null;
     let category = 'system';
     if (kind.includes('match')) {
-      linkView = 'matches';
+      linkView = linkView || 'matches';
       category = 'match';
     } else if (kind.includes('claim')) {
-      linkView = 'claims';
+      linkView = linkView || 'claims';
       category = 'claim';
     } else if (kind.includes('report')) {
-      linkView = 'browse';
+      linkView = linkView || 'browse';
       category = 'report';
     }
 
@@ -101,13 +117,17 @@ export default function NotificationsView({ onNavigate }) {
       isRead,
       time: timeFormatted,
       linkView,
-      badge: payload.badge || (category === 'match' ? 'Match Alert' : category === 'claim' ? 'Claim Alert' : null),
+      badge: payload.badge || item.badge || (category === 'match' ? 'Match Alert' : category === 'claim' ? 'Claim Alert' : null),
     };
   };
 
+  // Merge API notifications if available, otherwise use mockStore
   const normalizedList = useMemo(() => {
-    return notifications.map(parseNotification);
-  }, [notifications]);
+    if (user && apiNotifications.length > 0) {
+      return apiNotifications.map(parseNotification);
+    }
+    return mock.notifications.map(parseNotification);
+  }, [user, apiNotifications, mock.notifications]);
 
   const unreadCount = normalizedList.filter((n) => !n.isRead).length;
 
@@ -133,33 +153,6 @@ export default function NotificationsView({ onNavigate }) {
         return <Bell size={18} className="text-[#C68B59]" />;
     }
   };
-
-  const handleAction = async (item) => {
-    if (!item.isRead) {
-      await handleMarkRead(item.id);
-    }
-    if (item.linkView && onNavigate) {
-      onNavigate(item.linkView);
-    }
-  };
-
-  if (!user) {
-    return (
-      <div className="w-full max-w-2xl mx-auto">
-        <FloatingPanel title="e-Milap Updates &amp; Alerts">
-          <div className="py-12 text-center text-platinum-400 space-y-4">
-            <div className="w-14 h-14 rounded-2xl bg-[#261712] border border-[#6F4E37]/60 flex items-center justify-center text-[#E6E0F0] mx-auto shadow-md">
-              <Bell size={28} />
-            </div>
-            <h4 className="font-bold text-lg text-[#FAF9F8]">Sign-in Required</h4>
-            <p className="text-xs text-platinum-500 max-w-md mx-auto leading-relaxed">
-              Sign in to your campus account to view real-time notifications about automated matches, ownership claim reviews, and report status changes.
-            </p>
-          </div>
-        </FloatingPanel>
-      </div>
-    );
-  }
 
   return (
     <div className="w-full max-w-4xl mx-auto flex flex-col gap-6">
@@ -187,6 +180,17 @@ export default function NotificationsView({ onNavigate }) {
               className="px-3.5 py-2 bg-[#261712] hover:bg-[#341F18] border border-[#6F4E37]/60 text-xs font-semibold text-[#FAF9F8] rounded-xl flex items-center gap-1.5 transition shadow"
             >
               <CheckCheck size={14} className="text-[#C68B59]" /> Mark all read
+            </button>
+          )}
+          {normalizedList.length > 0 && (
+            <button
+              type="button"
+              onClick={mock.clearNotifications}
+              className="p-2 hover:bg-[#2C1812] border border-[#6F4E37]/40 text-[#E5E4E2]/60 hover:text-red-300 rounded-xl transition"
+              title="Clear notifications"
+              aria-label="Clear notifications"
+            >
+              <Trash2 size={16} />
             </button>
           )}
         </div>

@@ -1,4 +1,4 @@
-// Knowledge base and intent-matching constants for e-Milap Campus Lost & Found
+// Knowledge base and intent-matching constants for eMilap Campus Lost & Found
 
 export const QUICK_QUERIES = [
   { id: 'report_lost', label: 'How do I report a lost item?' },
@@ -12,7 +12,7 @@ export const QUICK_QUERIES = [
 export const TOPIC_RESPONSES = {
   report_lost: {
     title: 'Reporting a Lost Item',
-    content: `To report a lost item on e-Milap:
+    content: `To report a lost item on eMilap:
 1. Click **"Report Lost"** in the top navigation or home screen.
 2. Provide a descriptive title (e.g., "Navy Blue Herschel Backpack", "Matte Black AirPods Pro").
 3. Select the approximate date, time, and campus zone where you last saw it (Library, Cafeteria, Science Block, Quad).
@@ -60,7 +60,7 @@ export const TOPIC_RESPONSES = {
 
   matches: {
     title: 'Automated Match Engine',
-    content: `How e-Milap connects lost and found reports:
+    content: `How eMilap connects lost and found reports:
 • Our system constantly compares new reports by **Category**, **Location Zone**, **Date Range**, and **Key Descriptors**.
 • When similarity is high, the item shows under **"Possible Matches"** for both reporter and founder to review without exposing personal contact details.`,
     suggestedAction: { label: 'Explore Possible Matches', view: 'matches' },
@@ -77,10 +77,10 @@ export const TOPIC_RESPONSES = {
 
   moderation: {
     title: 'Trust & Moderation Standards',
-    content: `e-Milap operates with verified campus community oversight:
+    content: `eMilap operates with verified campus community oversight:
 • All reports are reviewed to prevent duplicate spam or fraudulent listings.
 • Handover transfers should always happen in well-lit public campus spots or at the Security Helpdesk.
-• Never pay fees or send money to reclaim an item — e-Milap is 100% free for the campus.`,
+• Never pay fees or send money to reclaim an item — eMilap is 100% free for the campus.`,
   },
 };
 
@@ -168,7 +168,7 @@ export function matchLostFoundQuery(rawInput) {
   // Off-topic constraint: Strictly refuse non-lost-and-found queries
   return {
     isOffTopic: true,
-    text: `I am **Milap.ai**, specifically designed to assist with campus lost and found topics only.
+    text: `I am **Milap.ai**, specifically designed to assist with campus lost and found topics only. 
 
 I cannot answer general trivia, coding, or unrelated queries. Please ask about:
 • Reporting a lost or found item
@@ -178,3 +178,4 @@ I cannot answer general trivia, coding, or unrelated queries. Please ask about:
     quickQueries: true,
   };
 }
+
