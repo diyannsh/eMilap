@@ -103,8 +103,18 @@
   height: 100vh;
   overflow: hidden;
   overflow: clip;
+  scroll-behavior: auto;
+  scroll-snap-type: none;
 }
-.hm-track { display: flex; width: max-content; height: 100%; align-items: center; gap: 32px; padding: 0 6vw; will-change: transform; }
+.hm-track { display: flex; width: max-content; height: 100%; align-items: center; gap: 32px; padding: 0 6vw; will-change: transform; scroll-snap-type: none; }
+.hm-track,
+.hm-card,
+.sections-track,
+.section-card,
+.carousel-item {
+  transition: none !important;
+  scroll-snap-align: none !important;
+}
 .hm-gallery-intro { flex: none; width: min(520px, 90vw); overflow: visible; }
 .hm-gallery-intro h2 { margin: 0; font-size: clamp(3rem, 8vw, 7rem); font-weight: 800; line-height: 0.95; letter-spacing: -0.05em; color: #FAF9F8; }
 .hm-gallery-intro p:last-child { margin: 16px 0 0; color: rgba(229, 228, 226, 0.65); font-size: 0.95rem; }
@@ -127,7 +137,7 @@
   text-align: left;
   cursor: pointer;
   box-shadow: 0 16px 40px rgba(12, 7, 5, 0.45);
-  transition: border-color 0.3s, transform 0.3s, box-shadow 0.3s;
+  transition: border-color 0.3s, box-shadow 0.3s;
 }
 .hm-card-image {
   position: absolute;
@@ -137,7 +147,7 @@
   height: 100%;
   object-fit: cover;
   opacity: 0.74;
-  transition: transform 0.55s ease, opacity 0.3s ease;
+  transition: opacity 0.3s ease;
 }
 .hm-card::before {
   position: absolute;
@@ -154,9 +164,8 @@
 .hm-card:hover {
   border-color: rgba(230, 224, 240, 0.6);
   box-shadow: 0 20px 48px rgba(12, 7, 5, 0.6), 0 0 0 1px rgba(230, 224, 240, 0.2);
-  transform: translateY(-6px);
 }
-.hm-card:hover .hm-card-image { transform: scale(1.045); opacity: 0.88; }
+.hm-card:hover .hm-card-image { opacity: 0.88; }
 .hm-card-meta {
   position: absolute;
   z-index: 1;
@@ -265,9 +274,9 @@
   border-radius: 50%;
   background: rgba(229, 228, 226, 0.35);
   cursor: pointer;
-  transition: background 220ms ease, transform 220ms ease, box-shadow 220ms ease;
+  transition: background 220ms ease, box-shadow 220ms ease;
 }
-.hm-section-dot:hover { background: #E5E4E2; transform: scale(1.35); }
+.hm-section-dot:hover { background: #E5E4E2; }
 .hm-section-dot.is-active {
   background: #E6E0F0;
   box-shadow: 0 0 0 4px rgba(230, 224, 240, 0.22);
@@ -282,7 +291,6 @@
   letter-spacing: 0.17em;
   text-transform: uppercase;
   white-space: nowrap;
-  transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* ---------- Footer ---------- */

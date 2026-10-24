@@ -1,4 +1,25 @@
 /* ── Desktop nav glass buttons ── */
+.overview-layer {
+  position: relative;
+}
+
+.section-view-overlay {
+  position: fixed;
+  z-index: 30;
+  inset: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-top: 68px;
+  background: #0E0805;
+}
+
+@media (min-width: 1280px) {
+  .section-view-overlay {
+    padding-top: 80px;
+  }
+}
+
 .section-nav-glass {
   width: 36px !important;
   height: 36px !important;
