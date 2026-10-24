@@ -261,6 +261,27 @@
 }
 
 /* ── Suggested Navigation Button inside Bot Message ── */
+.emilap-chat-inline-link {
+  color: #E6E0F0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 150ms ease;
+}
+
+.emilap-chat-inline-link:hover {
+  color: #FAF9F8;
+  text-decoration: underline;
+}
+
+.emilap-chat-actions-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
 .emilap-chat-action-btn {
   margin-top: 10px;
   display: inline-flex;

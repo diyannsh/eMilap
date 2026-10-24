@@ -18,7 +18,7 @@ chatRouter.post("/", chatLimiter, async (req, res, next) => {
     const data = chatMessageSchema.parse(req.body);
     const targetCommunityId = data.communityId || req.session?.communityId;
 
-    const result = await chatService.handleMessage(data.message, targetCommunityId);
+    const result = await chatService.handleMessage(data.message, targetCommunityId, data.history);
 
     res.json({
       data: result,

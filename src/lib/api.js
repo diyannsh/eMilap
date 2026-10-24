@@ -188,10 +188,10 @@ export const api = {
 
   // Assistant / Chatbot
   chat: {
-    send: (message, communityId) =>
+    send: (message, communityId, history = []) =>
       request('/chat', {
         method: 'POST',
-        body: JSON.stringify({ message, communityId }),
+        body: JSON.stringify({ message, communityId, history }),
       }),
   },
 

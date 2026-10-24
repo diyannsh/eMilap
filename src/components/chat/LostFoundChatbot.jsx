@@ -3,17 +3,46 @@ import { ArrowRight, Bot, MessageSquare, Send, ShieldAlert, Sparkles, X } from '
 import { QUICK_QUERIES, matchLostFoundQuery } from './lostFoundKnowledge.js';
 import { api } from '../../lib/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
+import { HASH_TO_VIEW, VIEW_TO_HASH } from '../../lib/routes.js';
 import './LostFoundChatbot.css';
 
-function formatMessageText(text) {
+function formatMessageText(text, onActionClick) {
   if (!text) return null;
 
   const lines = text.split('\n');
 
   return lines.map((line, lineIdx) => {
-    // Split by **bold** markdown tokens
-    const parts = line.split(/(\*\*[^*]+\*\*)/g);
+    // Split by markdown links: [Link Text](#hash-or-view) or bold **bold**
+    const parts = line.split(/(\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*)/g);
+
     const formattedLine = parts.map((part, partIdx) => {
+      // Check markdown link: [Label](#hash)
+      const linkMatch = part.match(/^\[([^\]]+)\]\((#[^)]+|[a-z_-]+)\)$/);
+      if (linkMatch) {
+        const [, label, target] = linkMatch;
+        const resolvedView =
+          HASH_TO_VIEW[target] ||
+          HASH_TO_VIEW[`#${target}`] ||
+          target.replace(/^#/, '').replace(/-/g, '_');
+
+        return (
+          <a
+            key={partIdx}
+            href={target.startsWith('#') ? target : `#${target}`}
+            onClick={(e) => {
+              e.preventDefault();
+              if (onActionClick) {
+                onActionClick(resolvedView);
+              }
+            }}
+            className="emilap-chat-inline-link"
+          >
+            {label}
+          </a>
+        );
+      }
+
+      // Check bold
       if (part.startsWith('**') && part.endsWith('**') && part.length >= 4) {
         return (
           <strong key={partIdx} className="emilap-bold-text">
@@ -21,6 +50,7 @@ function formatMessageText(text) {
           </strong>
         );
       }
+
       return part;
     });
 
@@ -65,6 +95,16 @@ export default function LostFoundChatbot({ visible = true, onNavigate }) {
     }
   }, [isOpen, messages, isTyping]);
 
+  const handleActionClick = (viewId) => {
+    setIsOpen(false);
+    if (onNavigate) {
+      onNavigate(viewId);
+    } else if (typeof window !== 'undefined') {
+      const hash = VIEW_TO_HASH[viewId] || `#${viewId}`;
+      window.location.hash = hash;
+    }
+  };
+
   const handleSend = async (textToSend = inputVal) => {
     const text = textToSend.trim();
     if (!text || isTyping) return;
@@ -81,21 +121,35 @@ export default function LostFoundChatbot({ visible = true, onNavigate }) {
     setInputVal('');
     setIsTyping(true);
 
+    // Build multi-turn context (last 6 messages)
+    const history = messages
+      .filter((m) => m.id !== 'welcome')
+      .slice(-6)
+      .map((m) => ({
+        role: m.sender === 'user' ? 'user' : 'assistant',
+        content: m.text,
+      }));
+
     try {
-      const res = await api.chat.send(text, user?.communityId);
+      const res = await api.chat.send(text, user?.communityId, history);
       const payload = res?.data || res;
       const botTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-      let action = null;
-      if (Array.isArray(payload?.matchedReports) && payload.matchedReports.length > 0) {
-        action = { label: 'Explore Campus Listings', view: 'browse' };
+      let actions = null;
+      if (Array.isArray(payload?.actions) && payload.actions.length > 0) {
+        actions = payload.actions;
+      } else if (payload?.action) {
+        actions = [payload.action];
+      } else if (Array.isArray(payload?.matchedReports) && payload.matchedReports.length > 0) {
+        actions = [{ label: 'Explore Campus Listings', view: 'browse', url: '#browse' }];
       }
 
       const botMsg = {
         id: `bot-${Date.now()}`,
         sender: 'bot',
         text: payload?.reply || 'Here is the campus lost and found information for your request.',
-        action,
+        action: actions?.[0] || null,
+        actions,
         showQuickQueries: false,
         time: botTime,
       };
@@ -103,14 +157,17 @@ export default function LostFoundChatbot({ visible = true, onNavigate }) {
       setMessages((prev) => [...prev, botMsg]);
     } catch {
       // Graceful offline/local fallback: answer using local campus knowledge base
-      const matchResult = matchLostFoundQuery(text);
+      const matchResult = matchLostFoundQuery(text, history);
       const botTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      const actions = matchResult.actions || (matchResult.action ? [matchResult.action] : null);
 
       const botMsg = {
         id: `bot-${Date.now()}`,
         sender: 'bot',
         text: matchResult.text,
-        action: matchResult.action,
+        action: matchResult.action || actions?.[0] || null,
+        actions,
         showQuickQueries: Boolean(matchResult.quickQueries),
         time: botTime,
       };
@@ -123,13 +180,6 @@ export default function LostFoundChatbot({ visible = true, onNavigate }) {
 
   const handleQuickClick = (queryLabel) => {
     handleSend(queryLabel);
-  };
-
-  const handleActionClick = (viewId) => {
-    setIsOpen(false);
-    if (onNavigate) {
-      onNavigate(viewId);
-    }
   };
 
   return (
@@ -201,21 +251,29 @@ export default function LostFoundChatbot({ visible = true, onNavigate }) {
                 className={`emilap-message ${msg.sender === 'user' ? 'emilap-message-user' : 'emilap-message-bot'}`}
               >
                 <div className="emilap-message-bubble">
-                  {formatMessageText(msg.text)}
+                  {formatMessageText(msg.text, handleActionClick)}
 
-                  {/* Navigation Action Button if available */}
-                  {msg.action && (
-                    <div>
-                      <button
-                        type="button"
-                        onClick={() => handleActionClick(msg.action.view)}
-                        className="emilap-chat-action-btn"
-                      >
-                        <span>{msg.action.label}</span>
-                        <ArrowRight size={14} />
-                      </button>
-                    </div>
-                  )}
+                  {/* Navigation Action Buttons if available */}
+                  {(() => {
+                    const actionsList = msg.actions || (msg.action ? [msg.action] : []);
+                    if (actionsList.length === 0) return null;
+
+                    return (
+                      <div className="emilap-chat-actions-group">
+                        {actionsList.map((act, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => handleActionClick(act.view)}
+                            className="emilap-chat-action-btn"
+                          >
+                            <span>{act.label}</span>
+                            <ArrowRight size={13} />
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  })()}
 
                   {/* Quick Queries (stacked pills styled matching reference screenshot) */}
                   {msg.showQuickQueries && (
