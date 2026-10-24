@@ -54,6 +54,7 @@ describe("Chatbot Module Security & Scoping", () => {
 
     beforeEach(() => {
       service = new ChatService();
+      ChatService.clearModelCache();
       vi.restoreAllMocks();
     });
 
@@ -158,6 +159,8 @@ describe("Chatbot Module Security & Scoping", () => {
       const res = await service.handleMessage("How do I report a lost phone?");
       expect(res.configuredModel).toBe(false);
       expect(res.provider).toBe("deterministic-retrieval");
+      expect(res.status).toBe("unconfigured");
+      expect(res.model).toBe("none");
       expect(res.note).toContain("GEMINI_API_KEY");
     });
 
@@ -198,6 +201,8 @@ describe("Chatbot Module Security & Scoping", () => {
 
       expect(res.configuredModel).toBe(true);
       expect(res.provider).toBe("gemini");
+      expect(res.status).toBe("success");
+      expect(res.model).toBe("gemini-2.5-flash");
       expect(capturedUrl).toContain("gemini-2.5-flash");
       expect(res.note).toContain("gemini-2.5-flash");
 
@@ -239,6 +244,9 @@ describe("Chatbot Module Security & Scoping", () => {
 
       const res = await service.handleMessage("Any lost umbrella?");
       expect(res.configuredModel).toBe(true);
+      expect(res.provider).toBe("gemini");
+      expect(res.status).toBe("success");
+      expect(res.model).toBe("gemini-2.5-flash-lite");
       expect(capturedUrl).toContain("gemini-2.5-flash-lite");
       expect(res.note).toContain("gemini-2.5-flash-lite");
     });
@@ -258,6 +266,7 @@ describe("Chatbot Module Security & Scoping", () => {
       const res = await service.handleMessage("Did anyone find a calculator?");
       expect(res.configuredModel).toBe(false);
       expect(res.provider).toBe("deterministic-retrieval");
+      expect(res.status).toBe("unavailable_model");
       expect(res.reply).toBeDefined();
       expect(res.note).toContain("HTTP 404");
     });
@@ -276,6 +285,7 @@ describe("Chatbot Module Security & Scoping", () => {
       const res = await service.handleMessage("Looking for blue backpack");
       expect(res.configuredModel).toBe(false);
       expect(res.provider).toBe("deterministic-retrieval");
+      expect(res.status).toBe("quota");
       expect(res.note).toContain("HTTP 429");
     });
 
@@ -293,6 +303,7 @@ describe("Chatbot Module Security & Scoping", () => {
       const res = await service.handleMessage("Looking for keys");
       expect(res.configuredModel).toBe(false);
       expect(res.provider).toBe("deterministic-retrieval");
+      expect(res.status).toBe("invalid_key");
       expect(res.note).toContain("Verify GEMINI_API_KEY");
       // Never leak the invalid key in the response note
       expect(res.note).not.toContain("invalid-key");
@@ -332,10 +343,11 @@ describe("Chatbot Module Security & Scoping", () => {
       const res = await service.handleMessage("I lost my umbrella in the cafeteria");
       expect(res.configuredModel).toBe(false);
       expect(res.provider).toBe("deterministic-retrieval");
+      expect(res.status).toBe("timeout");
       expect(res.note).toContain("timed out");
     });
 
-    it("dynamically resolves active Gemini models using models list", async () => {
+    it("dynamically resolves active Gemini models using models list while skipping shut-down models", async () => {
       process.env.GEMINI_API_KEY = "test-ai-key-12345";
 
       let calledUrl = "";
@@ -348,6 +360,8 @@ describe("Chatbot Module Security & Scoping", () => {
             json: async () => ({
               models: [
                 { name: "models/gemini-2.0-flash", supportedGenerationMethods: ["generateContent"] },
+                { name: "models/gemini-1.5-flash", supportedGenerationMethods: ["generateContent"] },
+                { name: "models/gemini-2.5-flash", supportedGenerationMethods: ["generateContent"] },
               ],
             }),
           } as any;
@@ -366,7 +380,108 @@ describe("Chatbot Module Security & Scoping", () => {
       const res = await service.handleMessage("Where is my calculator?");
       expect(res.configuredModel).toBe(true);
       expect(res.provider).toBe("gemini");
-      expect(calledUrl).toContain("gemini-2.0-flash");
+      expect(res.status).toBe("success");
+      expect(res.model).toBe("gemini-2.5-flash");
+      expect(calledUrl).toContain("gemini-2.5-flash");
+      expect(calledUrl).not.toContain("gemini-2.0-flash");
+      expect(calledUrl).not.toContain("gemini-1.5-flash");
+    });
+
+    it("strictly blocks configured shut-down models without invoking network", async () => {
+      process.env.GEMINI_API_KEY = "test-ai-key-12345";
+      process.env.GEMINI_MODEL = "gemini-1.5-flash";
+
+      const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+      const res = await service.handleMessage("Where is my water bottle?");
+      expect(res.provider).toBe("deterministic-retrieval");
+      expect(res.status).toBe("unavailable_model");
+      expect(res.model).toBe("gemini-1.5-flash");
+      expect(res.configuredModel).toBe(false);
+      expect(res.note).toContain("shut down");
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it("strictly blocks configured gemini-2.0-flash without invoking network", async () => {
+      process.env.GEMINI_API_KEY = "test-ai-key-12345";
+      process.env.GEMINI_MODEL = "gemini-2.0-flash";
+
+      const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+      const res = await service.handleMessage("Where is my water bottle?");
+      expect(res.provider).toBe("deterministic-retrieval");
+      expect(res.status).toBe("unavailable_model");
+      expect(res.model).toBe("gemini-2.0-flash");
+      expect(res.configuredModel).toBe(false);
+      expect(res.note).toContain("shut down");
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it("falls back safely to deterministic retrieval when discovery returns only retired models", async () => {
+      process.env.GEMINI_API_KEY = "test-ai-key-12345";
+
+      vi.spyOn(globalThis, "fetch").mockImplementation(async (url: any) => {
+        const u = String(url);
+        if (u.includes("/v1beta/models?key=")) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              models: [
+                { name: "models/gemini-2.0-flash", supportedGenerationMethods: ["generateContent"] },
+                { name: "models/gemini-1.5-flash", supportedGenerationMethods: ["generateContent"] },
+              ],
+            }),
+          } as any;
+        }
+        return { ok: false, status: 500 } as any;
+      });
+
+      const res = await service.handleMessage("Where is my umbrella?");
+      expect(res.provider).toBe("deterministic-retrieval");
+      expect(res.status).toBe("unavailable_model");
+      expect(res.configuredModel).toBe(false);
+      expect(res.reply).toBeDefined();
+    });
+
+    it("emits sanitized server-side observability logs without exposing secrets", async () => {
+      process.env.GEMINI_API_KEY = "super-secret-key-99999";
+      process.env.GEMINI_MODEL = "gemini-2.5-flash";
+
+      const consoleLogs: string[] = [];
+      vi.spyOn(console, "log").mockImplementation((...args: any[]) => {
+        consoleLogs.push(args.join(" "));
+      });
+
+      vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            candidates: [{ content: { parts: [{ text: "Observability test response" }] } }],
+          }),
+        } as any;
+      });
+
+      const res = await service.handleMessage("Looking for my private laptop with confidential serial number XYZ");
+      expect(res.status).toBe("success");
+      expect(res.provider).toBe("gemini");
+
+      // Verify safe observability log was generated
+      const obsLog = consoleLogs.find((l) => l.includes("[e-Milap Chat Observability]"));
+      expect(obsLog).toBeDefined();
+      expect(obsLog).toContain("provider=gemini");
+      expect(obsLog).toContain("status=success");
+      expect(obsLog).toContain("model=gemini-2.5-flash");
+      expect(obsLog).toContain("durationMs=");
+
+      // Strictly verify no secret, key, or sensitive user text leaked into server logs
+      for (const log of consoleLogs) {
+        expect(log).not.toContain("super-secret-key-99999");
+        expect(log).not.toContain("confidential serial number XYZ");
+        expect(log).not.toContain("foundnear.sid");
+        expect(log).not.toContain("cookie");
+      }
     });
 
     it("remains resilient and functional even if database connection fails", async () => {

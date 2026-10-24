@@ -21,12 +21,23 @@ export interface ChatAction {
   url?: string;
 }
 
+export type ChatProviderStatus =
+  | "success"
+  | "timeout"
+  | "quota"
+  | "invalid_key"
+  | "unavailable_model"
+  | "network_error"
+  | "unconfigured";
+
 export interface ChatResponseData {
   reply: string;
   matchedReports: PublicReportItem[];
   actions?: ChatAction[];
   action?: ChatAction | null;
-  provider: string;
+  provider: "gemini" | "deterministic-retrieval";
+  status: ChatProviderStatus;
+  model: string;
   communityId: string;
   communityName: string;
   configuredModel: boolean;
@@ -62,6 +73,17 @@ const STOP_WORDS = new Set([
   "i", "me", "my", "we", "our", "you", "your", "he", "him", "she", "her", "it", "its", "they", "them",
   "what", "which", "who", "when", "where", "why", "how", "all", "any", "some", "anyone", "someone",
   "item", "items", "tell", "show", "check", "please", "help", "can", "could", "would", "there", "this", "that"
+]);
+
+// Known shut-down / retired Gemini models that must never be called
+const SHUTDOWN_MODELS = new Set([
+  "gemini-1.5-flash",
+  "gemini-1.5-flash-8b",
+  "gemini-1.5-pro",
+  "gemini-2.0-flash",
+  "gemini-2.0-flash-lite",
+  "gemini-2.0-flash-exp",
+  "gemini-2.0-pro-exp",
 ]);
 
 export function extractSearchTokens(text: string): string[] {
@@ -111,12 +133,87 @@ function extractActionsFromText(text: string): ChatAction[] {
   });
 }
 
+interface ChatLogDetails {
+  provider: "gemini" | "deterministic-retrieval";
+  status: ChatProviderStatus;
+  model: string;
+  communityId: string;
+  durationMs: number;
+  reason?: string;
+}
+
+function logChatObservability(details: ChatLogDetails) {
+  // Safe server-side log: NEVER logs API key, cookies, headers, or private user text
+  const parts = [
+    `[e-Milap Chat Observability]`,
+    `provider=${details.provider}`,
+    `status=${details.status}`,
+    `model=${details.model || "none"}`,
+    `communityId=${details.communityId}`,
+    `durationMs=${details.durationMs}`,
+  ];
+  if (details.reason) {
+    const sanitizedReason = details.reason.replace(/[\r\n]/g, " ").slice(0, 120);
+    parts.push(`reason="${sanitizedReason}"`);
+  }
+  console.log(parts.join(" "));
+}
+
+interface CreateResponseParams {
+  reply: string;
+  matchedReports: PublicReportItem[];
+  actions?: ChatAction[];
+  action?: ChatAction | null;
+  provider: "gemini" | "deterministic-retrieval";
+  status: ChatProviderStatus;
+  model: string;
+  communityId: string;
+  communityName: string;
+  configuredModel: boolean;
+  note: string;
+  startTime: number;
+  reason?: string;
+}
+
+function createResponse(params: CreateResponseParams): ChatResponseData {
+  const durationMs = Date.now() - params.startTime;
+  logChatObservability({
+    provider: params.provider,
+    status: params.status,
+    model: params.model,
+    communityId: params.communityId,
+    durationMs,
+    reason: params.reason,
+  });
+
+  return {
+    reply: params.reply,
+    matchedReports: params.matchedReports,
+    actions: params.actions,
+    action: params.action,
+    provider: params.provider,
+    status: params.status,
+    model: params.model,
+    communityId: params.communityId,
+    communityName: params.communityName,
+    configuredModel: params.configuredModel,
+    note: params.note,
+  };
+}
+
 export class ChatService {
+  private static cachedAvailableModels: { list: string[]; timestamp: number } | null = null;
+
+  public static clearModelCache() {
+    ChatService.cachedAvailableModels = null;
+  }
+
   async handleMessage(
     message: string,
     communityId?: string,
     history: ChatHistoryItem[] = []
   ): Promise<ChatResponseData> {
+    const startTime = Date.now();
     const trimmed = message.trim();
 
     // 1. Resolve active campus community
@@ -187,7 +284,7 @@ export class ChatService {
 
     if (isMutationIntent) {
       const actions = [ROUTE_ACTIONS.browse, ROUTE_ACTIONS.claims];
-      return {
+      return createResponse({
         reply:
           "I am a read-only information assistant and cannot execute claims, alter report statuses, or make moderation decisions. " +
           "To claim an item, click on the listing card in [Campus Listings](#browse) and press **Claim This Item**. " +
@@ -198,11 +295,14 @@ export class ChatService {
         actions,
         action: actions[0],
         provider: "deterministic-retrieval",
+        status: "unconfigured",
+        model: "none",
         communityId: commId,
         communityName: commName,
         configuredModel: false,
         note: "Deterministic campus search assistant active (Optional AI model not configured). To enable optional LLM generation, set GEMINI_API_KEY in the API environment with a model available on your free tier.",
-      };
+        startTime,
+      });
     }
 
     const defaultNote =
@@ -212,7 +312,7 @@ export class ChatService {
     const isGreeting = /^(hi|hello|hey|good morning|good afternoon|good evening|howdy|sup|yo|greetings)\b/i.test(lowerMsg);
     if (isGreeting && lowerMsg.split(/\s+/).length <= 4) {
       const actions = [ROUTE_ACTIONS.report_lost, ROUTE_ACTIONS.report_found, ROUTE_ACTIONS.browse];
-      return {
+      return createResponse({
         reply:
           `Hello! 👋 I'm **Milap.ai**, your campus lost & found assistant for **${commName}**.\n\n` +
           `I can help you navigate lost and found recovery across campus:\n` +
@@ -225,11 +325,14 @@ export class ChatService {
         actions,
         action: actions[0],
         provider: "deterministic-retrieval",
+        status: "unconfigured",
+        model: "none",
         communityId: commId,
         communityName: commName,
         configuredModel: false,
         note: defaultNote,
-      };
+        startTime,
+      });
     }
 
     // 5. Reporting Inquiries & Multi-turn Follow-up Context Resolution
@@ -255,7 +358,7 @@ export class ChatService {
 
       if (wasLost && !wasFound) {
         const actions = [ROUTE_ACTIONS.report_lost, ROUTE_ACTIONS.browse, ROUTE_ACTIONS.matches];
-        return {
+        return createResponse({
           reply:
             `To report a lost item on e-Milap:\n\n` +
             `1. Open **[Report Lost](#report-lost)** in the navigation.\n` +
@@ -266,16 +369,19 @@ export class ChatService {
           actions,
           action: actions[0],
           provider: "deterministic-retrieval",
+          status: "unconfigured",
+          model: "none",
           communityId: commId,
           communityName: commName,
           configuredModel: false,
           note: defaultNote,
-        };
+          startTime,
+        });
       }
 
       if (wasFound && !wasLost) {
         const actions = [ROUTE_ACTIONS.report_found, ROUTE_ACTIONS.browse];
-        return {
+        return createResponse({
           reply:
             `Thank you for helping return property! You can log the item you found by opening **[Report Found](#report-found)**.\n\n` +
             `**Guidelines:**\n` +
@@ -286,16 +392,19 @@ export class ChatService {
           actions,
           action: actions[0],
           provider: "deterministic-retrieval",
+          status: "unconfigured",
+          model: "none",
           communityId: commId,
           communityName: commName,
           configuredModel: false,
           note: defaultNote,
-        };
+          startTime,
+        });
       }
 
       // If neither or both
       const actions = [ROUTE_ACTIONS.report_lost, ROUTE_ACTIONS.report_found, ROUTE_ACTIONS.browse];
-      return {
+      return createResponse({
         reply:
           `To report an item on e-Milap:\n\n` +
           `• **If you lost an item:** Click **[Report Lost](#report-lost)** to log details and submit encrypted verification clues.\n` +
@@ -305,11 +414,14 @@ export class ChatService {
         actions,
         action: actions[0],
         provider: "deterministic-retrieval",
+        status: "unconfigured",
+        model: "none",
         communityId: commId,
         communityName: commName,
         configuredModel: false,
         note: defaultNote,
-      };
+        startTime,
+      });
     }
 
     // 6. Explicit Feature & Policy Guidance
@@ -325,7 +437,7 @@ export class ChatService {
       lowerMsg.includes("ownership verification")
     ) {
       const actions = [ROUTE_ACTIONS.claims, ROUTE_ACTIONS.browse];
-      return {
+      return createResponse({
         reply:
           "To claim an item on e-Milap:\n" +
           "1. Navigate to [Campus Listings](#browse) and select the found item.\n" +
@@ -337,16 +449,19 @@ export class ChatService {
         actions,
         action: actions[0],
         provider: "deterministic-retrieval",
+        status: "unconfigured",
+        model: "none",
         communityId: commId,
         communityName: commName,
         configuredModel: false,
-        note: "Deterministic campus search assistant active.",
-      };
+        note: defaultNote,
+        startTime,
+      });
     }
 
     // Private clues & Encryption
     if (lowerMsg.includes("private clue") || lowerMsg.includes("private detail") || lowerMsg.includes("encryption")) {
-      return {
+      return createResponse({
         reply:
           "Private ownership clues are secret details submitted by the reporter (such as engraved initials, lock codes, or distinctive marks) that are encrypted using **AES-256-GCM**. " +
           "They are strictly separated from public directory feeds and are never shared publicly or sent to third-party models. Only authorized moderators decrypt them during claim review.",
@@ -354,11 +469,14 @@ export class ChatService {
         actions: [ROUTE_ACTIONS.browse],
         action: ROUTE_ACTIONS.browse,
         provider: "deterministic-retrieval",
+        status: "unconfigured",
+        model: "none",
         communityId: commId,
         communityName: commName,
         configuredModel: false,
-        note: "Deterministic campus search assistant active.",
-      };
+        note: defaultNote,
+        startTime,
+      });
     }
 
     // Desk location, hours, and contact
@@ -374,7 +492,7 @@ export class ChatService {
       lowerMsg.includes("where to drop off") ||
       lowerMsg.includes("drop off location")
     ) {
-      return {
+      return createResponse({
         reply:
           "📍 **Campus Lost & Found Collection & Drop-off Desk**\n\n" +
           "• **Location:** Administration Building, Ground Floor, Room 104 (Next to Student Services)\n" +
@@ -387,11 +505,14 @@ export class ChatService {
         actions: [ROUTE_ACTIONS.browse, ROUTE_ACTIONS.report_found],
         action: ROUTE_ACTIONS.browse,
         provider: "deterministic-retrieval",
+        status: "unconfigured",
+        model: "none",
         communityId: commId,
         communityName: commName,
         configuredModel: false,
-        note: "Deterministic campus guidance active.",
-      };
+        note: defaultNote,
+        startTime,
+      });
     }
 
     // Matches
@@ -402,7 +523,7 @@ export class ChatService {
       lowerMsg.includes("automatic match")
     ) {
       const actions = [ROUTE_ACTIONS.matches, ROUTE_ACTIONS.browse];
-      return {
+      return createResponse({
         reply:
           "e-Milap features an automated matching engine that cross-references new Lost and Found reports by Category, Location Zone, Date Range, and visual descriptors. " +
           "When a potential match is found, both parties receive a notification and can review potential matches in [Possible Matches](#matches).",
@@ -410,17 +531,20 @@ export class ChatService {
         actions,
         action: actions[0],
         provider: "deterministic-retrieval",
+        status: "unconfigured",
+        model: "none",
         communityId: commId,
         communityName: commName,
         configuredModel: false,
-        note: "Deterministic campus guidance active.",
-      };
+        note: defaultNote,
+        startTime,
+      });
     }
 
     // Notifications / Updates
     if (lowerMsg.includes("notification") || lowerMsg.includes("alerts") || lowerMsg.includes("status update")) {
       const actions = [ROUTE_ACTIONS.notifications, ROUTE_ACTIONS.dashboard];
-      return {
+      return createResponse({
         reply:
           "You can review your system updates, match alerts, and claim reviews in [Updates & Alerts](#updates). " +
           "Whenever a moderator approves your claim or an item matches your report, a notification will appear there.",
@@ -428,11 +552,14 @@ export class ChatService {
         actions,
         action: actions[0],
         provider: "deterministic-retrieval",
+        status: "unconfigured",
+        model: "none",
         communityId: commId,
         communityName: commName,
         configuredModel: false,
-        note: "Deterministic campus guidance active.",
-      };
+        note: defaultNote,
+        startTime,
+      });
     }
 
     // Account / Settings / Profile
@@ -444,54 +571,41 @@ export class ChatService {
       lowerMsg.includes("community switch")
     ) {
       const actions = [ROUTE_ACTIONS.settings];
-      return {
+      return createResponse({
         reply:
           "You can manage your campus profile, update display settings, and switch active campus communities in [Account Settings](#settings).",
         matchedReports: [],
         actions,
         action: actions[0],
         provider: "deterministic-retrieval",
+        status: "unconfigured",
+        model: "none",
         communityId: commId,
         communityName: commName,
         configuredModel: false,
-        note: "Deterministic campus guidance active.",
-      };
+        note: defaultNote,
+        startTime,
+      });
     }
 
     // Moderation / Admin
     if (lowerMsg.includes("moderation") || lowerMsg.includes("admin panel") || lowerMsg.includes("moderator")) {
       const actions = [ROUTE_ACTIONS.admin];
-      return {
+      return createResponse({
         reply:
           "Campus administrators and verified staff can review submitted claims, verify encrypted private clues, and manage community reports in the [Moderation Panel](#moderation).",
         matchedReports: [],
         actions,
         action: actions[0],
         provider: "deterministic-retrieval",
+        status: "unconfigured",
+        model: "none",
         communityId: commId,
         communityName: commName,
         configuredModel: false,
-        note: "Deterministic campus guidance active.",
-      };
-    }
-
-    // How to report general
-    if (lowerMsg === "how to report" || lowerMsg === "reporting" || lowerMsg === "how do i report") {
-      const actions = [ROUTE_ACTIONS.report_lost, ROUTE_ACTIONS.report_found];
-      return {
-        reply:
-          "To report an item on e-Milap:\n" +
-          "• If you lost an item: Click [Report Lost](#report-lost), specify category, approximate location, date, and add encrypted private clues.\n" +
-          "• If you found an item: Click [Report Found](#report-found), describe its appearance, and select the campus location where you found it.",
-        matchedReports: [],
-        actions,
-        action: actions[0],
-        provider: "deterministic-retrieval",
-        communityId: commId,
-        communityName: commName,
-        configuredModel: false,
-        note: "Deterministic campus search assistant active.",
-      };
+        note: defaultNote,
+        startTime,
+      });
     }
 
     // 7. Query matching over public reports in active community
@@ -534,34 +648,41 @@ export class ChatService {
       lowerMsg.includes("deposit");
 
     // 9. External LLM Provider Handling (if configured)
-    const hasGemini = Boolean(process.env.GEMINI_API_KEY && !process.env.GEMINI_API_KEY.includes("replace-"));
-    let llmFallbackNote: string | null = null;
+    const hasGeminiKey = Boolean(process.env.GEMINI_API_KEY && !process.env.GEMINI_API_KEY.includes("replace-"));
+    let llmFallbackReason: string | null = null;
+    let fallbackStatus: ChatProviderStatus = hasGeminiKey ? "unavailable_model" : "unconfigured";
+    let attemptedModel = "none";
 
-    if (hasGemini) {
+    if (hasGeminiKey) {
       const llmResult = await this.invokeOptionalLLM(trimmed, matched, commName, history);
-      if (llmResult.reply) {
+      attemptedModel = llmResult.model;
+      if (llmResult.reply && llmResult.status === "success") {
         const extractedActions = extractActionsFromText(llmResult.reply);
         if (extractedActions.length === 0 && matched.length > 0) {
           extractedActions.push(ROUTE_ACTIONS.browse);
         }
-        return {
+        return createResponse({
           reply: llmResult.reply,
           matchedReports: matched.slice(0, 5),
           actions: extractedActions,
           action: extractedActions[0] || null,
-          provider: llmResult.provider,
+          provider: "gemini",
+          status: "success",
+          model: llmResult.model,
           communityId: commId,
           communityName: commName,
           configuredModel: true,
           note: `Grounded response generated using Gemini (${llmResult.model}) scoped strictly to public reports in ${commName}.`,
-        };
+          startTime,
+        });
       }
+      fallbackStatus = llmResult.status;
       if (llmResult.errorReason) {
-        llmFallbackNote = `Live Gemini response unavailable (${llmResult.errorReason}). Fallen back safely to deterministic campus search.`;
+        llmFallbackReason = `Live Gemini response unavailable (${llmResult.errorReason}). Fallen back safely to deterministic campus search.`;
       }
     }
 
-    const activeNote = llmFallbackNote || defaultNote;
+    const activeNote = llmFallbackReason || defaultNote;
 
     // 10. Ambiguity Handling: If query mentions items/tokens but lacks explicit Lost vs Found intent
     // e.g. "blue backpack", "keys", "calculator in library", "umbrella", "airpods"
@@ -589,7 +710,7 @@ export class ChatService {
         ROUTE_ACTIONS.browse,
       ];
 
-      return {
+      return createResponse({
         reply:
           `Did you **lose** this item, or did you **find** it on campus?\n\n` +
           `• **If you lost it:** Click **[Report Lost](#report-lost)** so our system can search for matches and alert you when someone turns it in.\n` +
@@ -599,11 +720,15 @@ export class ChatService {
         actions,
         action: actions[0],
         provider: "deterministic-retrieval",
+        status: fallbackStatus,
+        model: attemptedModel,
         communityId: commId,
         communityName: commName,
         configuredModel: false,
         note: activeNote,
-      };
+        startTime,
+        reason: llmFallbackReason || undefined,
+      });
     }
 
     // 11. Explicit Lost intent with or without matches
@@ -619,7 +744,7 @@ export class ChatService {
           })
           .join("\n");
 
-        return {
+        return createResponse({
           reply:
             `I found ${foundMatches.length} turned-in item(s) in **${commName}** that may match what you lost:\n\n${itemsList}\n\n` +
             `If one of these is yours, visit **[Campus Listings](#browse)** to review details and click **Claim This Item** to submit ownership proof.\n\n` +
@@ -628,14 +753,18 @@ export class ChatService {
           actions,
           action: actions[0],
           provider: "deterministic-retrieval",
+          status: fallbackStatus,
+          model: attemptedModel,
           communityId: commId,
           communityName: commName,
           configuredModel: false,
           note: activeNote,
-        };
+          startTime,
+          reason: llmFallbackReason || undefined,
+        });
       }
 
-      return {
+      return createResponse({
         reply:
           `I couldn't find an existing found report matching "${trimmed}" in **${commName}** yet.\n\n` +
           `**Next Steps:**\n` +
@@ -646,11 +775,15 @@ export class ChatService {
         actions,
         action: actions[0],
         provider: "deterministic-retrieval",
+        status: fallbackStatus,
+        model: attemptedModel,
         communityId: commId,
         communityName: commName,
         configuredModel: false,
         note: activeNote,
-      };
+        startTime,
+        reason: llmFallbackReason || undefined,
+      });
     }
 
     // 12. Explicit Found intent
@@ -666,7 +799,7 @@ export class ChatService {
           })
           .join("\n");
 
-        return {
+        return createResponse({
           reply:
             `Thank you for helping out! Someone has reported losing a similar item in **${commName}**:\n\n${itemsList}\n\n` +
             `Please submit a report via **[Report Found](#report-found)** or deposit the item at the **Campus Desk (Admin Block 104)** so the owner can verify their claim securely.`,
@@ -674,14 +807,18 @@ export class ChatService {
           actions,
           action: actions[0],
           provider: "deterministic-retrieval",
+          status: fallbackStatus,
+          model: attemptedModel,
           communityId: commId,
           communityName: commName,
           configuredModel: false,
           note: activeNote,
-        };
+          startTime,
+          reason: llmFallbackReason || undefined,
+        });
       }
 
-      return {
+      return createResponse({
         reply:
           `Thank you for finding someone's belongings! To help return them safely:\n\n` +
           `1. Submit a **[Report Found](#report-found)** with the visible item appearance and campus location.\n` +
@@ -691,11 +828,15 @@ export class ChatService {
         actions,
         action: actions[0],
         provider: "deterministic-retrieval",
+        status: fallbackStatus,
+        model: attemptedModel,
         communityId: commId,
         communityName: commName,
         configuredModel: false,
         note: activeNote,
-      };
+        startTime,
+        reason: llmFallbackReason || undefined,
+      });
     }
 
     // 13. General Search / Matched listings fallback
@@ -712,7 +853,7 @@ export class ChatService {
 
       const actions = [ROUTE_ACTIONS.browse, ROUTE_ACTIONS.report_lost, ROUTE_ACTIONS.report_found];
 
-      return {
+      return createResponse({
         reply:
           `I found ${matched.length} report(s) matching your inquiry in **${commName}**:\n\n${itemsList}\n\n` +
           `You can browse, filter, or claim any open item directly in **[Campus Listings](#browse)**.`,
@@ -720,16 +861,20 @@ export class ChatService {
         actions,
         action: actions[0],
         provider: "deterministic-retrieval",
+        status: fallbackStatus,
+        model: attemptedModel,
         communityId: commId,
         communityName: commName,
         configuredModel: false,
         note: activeNote,
-      };
+        startTime,
+        reason: llmFallbackReason || undefined,
+      });
     }
 
     // 14. Default fallback when no tokens matched and no specific intent was detected
     const defaultActions = [ROUTE_ACTIONS.browse, ROUTE_ACTIONS.report_lost, ROUTE_ACTIONS.report_found];
-    return {
+    return createResponse({
       reply:
         `I searched active public reports in **${commName}**, but did not find any items matching "${trimmed}".\n\n` +
         `**Helpful Options:**\n` +
@@ -740,11 +885,15 @@ export class ChatService {
       actions: defaultActions,
       action: defaultActions[0],
       provider: "deterministic-retrieval",
+      status: fallbackStatus,
+      model: attemptedModel,
       communityId: commId,
       communityName: commName,
       configuredModel: false,
       note: activeNote,
-    };
+      startTime,
+      reason: llmFallbackReason || undefined,
+    });
   }
 
   private async invokeOptionalLLM(
@@ -752,10 +901,71 @@ export class ChatService {
     publicReports: PublicReportItem[],
     communityName: string,
     history: ChatHistoryItem[] = []
-  ): Promise<{ reply: string | null; provider: string; model: string; errorReason?: string }> {
+  ): Promise<{
+    reply: string | null;
+    provider: "gemini";
+    status: ChatProviderStatus;
+    model: string;
+    errorReason?: string;
+  }> {
     const geminiKey = process.env.GEMINI_API_KEY;
     if (!geminiKey || geminiKey.includes("replace-")) {
-      return { reply: null, provider: "none", model: "none" };
+      return {
+        reply: null,
+        provider: "gemini",
+        status: "unconfigured",
+        model: "none",
+        errorReason: "GEMINI_API_KEY is not configured in environment.",
+      };
+    }
+
+    // 1. Check if an explicit model was requested
+    const requestedModel = (process.env.GEMINI_MODEL || "").trim();
+
+    // Prevent calling known shut-down / retired models
+    if (requestedModel && SHUTDOWN_MODELS.has(requestedModel)) {
+      return {
+        reply: null,
+        provider: "gemini",
+        status: "unavailable_model",
+        model: requestedModel,
+        errorReason: `Configured model '${requestedModel}' has been shut down and is no longer available.`,
+      };
+    }
+
+    let selectedModel = requestedModel;
+
+    // 2. If no model explicitly configured, dynamically resolve active models from API key
+    if (!selectedModel) {
+      const discovery = await this.getAvailableGeminiModels(geminiKey);
+      if (discovery.errorCategory === "invalid_key" || discovery.errorCategory === "quota") {
+        return {
+          reply: null,
+          provider: "gemini",
+          status: discovery.errorCategory,
+          model: "none",
+          errorReason: discovery.errorMessage || "Failed to query available models.",
+        };
+      }
+
+      if (discovery.models.length > 0) {
+        // Prioritize active Flash models (which are not shut down)
+        const flashModel = discovery.models.find((m) => m.toLowerCase().includes("flash"));
+        selectedModel = flashModel || discovery.models[0] || "";
+      } else if (discovery.errorCategory === "unavailable_model") {
+        return {
+          reply: null,
+          provider: "gemini",
+          status: "unavailable_model",
+          model: "none",
+          errorReason: discovery.errorMessage || "No active supported models available for this API key.",
+        };
+      }
+
+      // If discovery had an unexpected network error or was unmocked, default to active general-purpose model
+      if (!selectedModel) {
+        selectedModel = "gemini-2.5-flash";
+      }
     }
 
     // PRIVACY BOUNDARY: Strictly public report metadata only
@@ -791,29 +1001,6 @@ export class ChatService {
       `Campus Desk: Admin Building, Room 104, Mon-Fri 8:30 AM - 5:30 PM.\n` +
       `Active Public Reports Context: ${JSON.stringify(publicContext)}`;
 
-    const requestedModel = (process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
-
-    // Dynamically check which models are enabled for this API key project
-    const availableModels = await this.getAvailableGeminiModels(geminiKey);
-
-    let modelsToTry: string[];
-    if (availableModels.length > 0) {
-      const flashModels = availableModels.filter((m) => m.toLowerCase().includes("flash"));
-      const otherModels = availableModels.filter((m) => !m.toLowerCase().includes("flash"));
-      modelsToTry = [
-        ...(availableModels.includes(requestedModel) ? [requestedModel] : []),
-        ...flashModels,
-        ...otherModels,
-      ].filter((m, i, arr) => arr.indexOf(m) === i).slice(0, 3);
-    } else {
-      modelsToTry = [
-        requestedModel,
-        "gemini-2.0-flash",
-        "gemini-1.5-flash",
-        "gemini-2.5-flash-lite",
-      ].filter((m, i, arr) => m && arr.indexOf(m) === i);
-    }
-
     // Build multi-turn contents array
     const contents: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> = [];
 
@@ -837,74 +1024,115 @@ export class ChatService {
       parts: [{ text: currentTurnText }],
     });
 
-    let lastError: string = "Unknown error";
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3500);
 
-    for (const model of modelsToTry.slice(0, 2)) {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 3500);
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(selectedModel)}:generateContent?key=${encodeURIComponent(geminiKey)}`;
+      const payload: any = {
+        contents,
+        generationConfig: { maxOutputTokens: 350, temperature: 0.2 },
+      };
 
-      try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(geminiKey)}`;
-        const payload: any = {
-          contents,
-          generationConfig: { maxOutputTokens: 350, temperature: 0.2 },
+      if (contents.length > 1) {
+        payload.systemInstruction = {
+          parts: [{ text: systemPrompt }],
         };
-
-        if (contents.length > 1) {
-          payload.systemInstruction = {
-            parts: [{ text: systemPrompt }],
-          };
-        }
-
-        const res = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-          signal: controller.signal,
-        });
-
-        if (res.status === 404) {
-          lastError = `Model '${model}' was not found or has been retired for this API key project (HTTP 404).`;
-          continue;
-        }
-
-        if (res.status === 429) {
-          lastError = `Gemini API free-tier quota limit reached (HTTP 429).`;
-          break;
-        }
-
-        if (res.status === 401 || res.status === 403) {
-          lastError = `Gemini API authentication failed (HTTP ${res.status}). Verify GEMINI_API_KEY.`;
-          break;
-        }
-
-        if (!res.ok) {
-          lastError = `Gemini API returned HTTP status ${res.status}.`;
-          break;
-        }
-
-        const data: any = await res.json();
-        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (text && typeof text === "string" && text.trim().length > 0) {
-          return { reply: text.trim(), provider: "gemini", model };
-        }
-      } catch (err: any) {
-        lastError = err.name === "AbortError" ? "Gemini API request timed out (3.5s limit)" : err.message;
-        break;
-      } finally {
-        clearTimeout(timeout);
       }
-    }
 
-    return { reply: null, provider: "gemini", model: requestedModel, errorReason: lastError };
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+
+      if (res.status === 404) {
+        return {
+          reply: null,
+          provider: "gemini",
+          status: "unavailable_model",
+          model: selectedModel,
+          errorReason: `Model '${selectedModel}' was not found or has been retired for this API key project (HTTP 404).`,
+        };
+      }
+
+      if (res.status === 429) {
+        return {
+          reply: null,
+          provider: "gemini",
+          status: "quota",
+          model: selectedModel,
+          errorReason: "Gemini API free-tier quota limit reached (HTTP 429).",
+        };
+      }
+
+      if (res.status === 401 || res.status === 403) {
+        return {
+          reply: null,
+          provider: "gemini",
+          status: "invalid_key",
+          model: selectedModel,
+          errorReason: `Gemini API authentication failed (HTTP ${res.status}). Verify GEMINI_API_KEY.`,
+        };
+      }
+
+      if (!res.ok) {
+        return {
+          reply: null,
+          provider: "gemini",
+          status: "unavailable_model",
+          model: selectedModel,
+          errorReason: `Gemini API returned HTTP status ${res.status}.`,
+        };
+      }
+
+      const data: any = await res.json();
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (text && typeof text === "string" && text.trim().length > 0) {
+        return {
+          reply: text.trim(),
+          provider: "gemini",
+          status: "success",
+          model: selectedModel,
+        };
+      }
+
+      return {
+        reply: null,
+        provider: "gemini",
+        status: "unavailable_model",
+        model: selectedModel,
+        errorReason: "Gemini API returned an empty response.",
+      };
+    } catch (err: any) {
+      if (err.name === "AbortError") {
+        return {
+          reply: null,
+          provider: "gemini",
+          status: "timeout",
+          model: selectedModel,
+          errorReason: "Gemini API request timed out (3.5s limit).",
+        };
+      }
+      return {
+        reply: null,
+        provider: "gemini",
+        status: "network_error",
+        model: selectedModel,
+        errorReason: "Network error communicating with Gemini API.",
+      };
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
-  private static cachedAvailableModels: { list: string[]; timestamp: number } | null = null;
-
-  private async getAvailableGeminiModels(apiKey: string): Promise<string[]> {
+  private async getAvailableGeminiModels(
+    apiKey: string
+  ): Promise<{ models: string[]; errorCategory?: ChatProviderStatus; errorMessage?: string }> {
     const now = Date.now();
-    if (ChatService.cachedAvailableModels && now - ChatService.cachedAvailableModels.timestamp < 30 * 60 * 1000) {
-      return ChatService.cachedAvailableModels.list;
+    if (ChatService.cachedAvailableModels && now - ChatService.cachedAvailableModels.timestamp < 15 * 60 * 1000) {
+      return { models: ChatService.cachedAvailableModels.list };
     }
 
     try {
@@ -914,20 +1142,64 @@ export class ChatService {
       const res = await fetch(url, { signal: controller.signal });
       clearTimeout(timeout);
 
-      if (!res.ok) return [];
+      if (res.status === 401 || res.status === 403) {
+        return {
+          models: [],
+          errorCategory: "invalid_key",
+          errorMessage: `Gemini API authentication failed (HTTP ${res.status}). Verify GEMINI_API_KEY.`,
+        };
+      }
+
+      if (res.status === 429) {
+        return {
+          models: [],
+          errorCategory: "quota",
+          errorMessage: "Gemini API quota limit reached (HTTP 429).",
+        };
+      }
+
+      if (!res.ok) {
+        return {
+          models: [],
+          errorCategory: "unavailable_model",
+          errorMessage: `Failed to retrieve available models list (HTTP ${res.status}).`,
+        };
+      }
+
       const data: any = await res.json();
       if (Array.isArray(data?.models)) {
         const list = data.models
-          .filter((m: any) => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes("generateContent"))
+          .filter(
+            (m: any) =>
+              Array.isArray(m.supportedGenerationMethods) &&
+              m.supportedGenerationMethods.includes("generateContent")
+          )
           .map((m: any) => String(m.name || "").replace(/^models\//, ""))
-          .filter(Boolean);
+          .filter((name: string) => Boolean(name) && !SHUTDOWN_MODELS.has(name));
+
         ChatService.cachedAvailableModels = { list, timestamp: now };
-        return list;
+        return { models: list };
       }
-    } catch {
-      // Ignore discovery errors, fallback to static models
+
+      return {
+        models: [],
+        errorCategory: "unavailable_model",
+        errorMessage: "No models returned from Google AI Studio.",
+      };
+    } catch (err: any) {
+      if (err.name === "AbortError") {
+        return {
+          models: [],
+          errorCategory: "timeout",
+          errorMessage: "Model discovery request timed out (2.5s limit).",
+        };
+      }
+      return {
+        models: [],
+        errorCategory: "network_error",
+        errorMessage: "Network error reaching Gemini model discovery.",
+      };
     }
-    return [];
   }
 }
 
