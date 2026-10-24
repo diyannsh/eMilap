@@ -11,6 +11,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:all": "npm run build && npm run build:api",
+    "start": "node apps/api/dist/server.js",
     "preview": "vite preview",
     "dev:all": "concurrently \"npm:dev\" \"npm:dev:api\" \"npm:dev:ai\"",
     "dev:api": "npm run dev --workspace @foundnear/api",
@@ -22,7 +24,8 @@
     "typecheck:api": "npm run typecheck --workspace @foundnear/api",
     "db:up": "docker compose -f infra/compose.yaml up -d postgres",
     "db:down": "docker compose -f infra/compose.yaml down",
-    "db:migrate": "node database/scripts/migrate.mjs"
+    "db:migrate": "node database/scripts/migrate.mjs",
+    "db:verify": "node database/scripts/verify-db.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^9.122.0",

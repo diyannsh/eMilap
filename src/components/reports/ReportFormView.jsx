@@ -1,17 +1,34 @@
 import { useEffect, useRef, useState } from 'react';
-import { Camera, ImagePlus, Trash2, Upload } from 'lucide-react';
+import { Camera, CheckCircle2, ImagePlus, LogIn, Trash2, Upload } from 'lucide-react';
 import FloatingPanel from '../ui/FloatingPanel.jsx';
 import { Eye, Lock } from '../../lib/icons.js';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { api } from '../../lib/api.js';
 
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
 
 const ReportFormView = ({ type }) => {
+  const { user } = useAuth();
   const [image, setImage] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
   const [imageError, setImageError] = useState('');
   const galleryInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const isLost = type === 'lost';
+
+  // Form field states
+  const [title, setTitle] = useState('');
+  const [publicDescription, setPublicDescription] = useState('');
+  const [category, setCategory] = useState('Electronics');
+  const [color, setColor] = useState('');
+  const [brand, setBrand] = useState('');
+  const [approximateLocation, setApproximateLocation] = useState('');
+  const [privateClues, setPrivateClues] = useState('');
+
+  // Submission state
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [successData, setSuccessData] = useState(null);
 
   useEffect(() => () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -41,10 +58,99 @@ const ReportFormView = ({ type }) => {
     if (cameraInputRef.current) cameraInputRef.current.value = '';
   };
 
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setErrorMessage('');
+    setSuccessData(null);
+
+    if (!user) {
+      setErrorMessage('Please sign in before submitting a report.');
+      return;
+    }
+
+    if (!title.trim() || title.trim().length < 2) {
+      setErrorMessage('Please provide an item name of at least 2 characters.');
+      return;
+    }
+    if (!publicDescription.trim() || publicDescription.trim().length < 5) {
+      setErrorMessage('Please provide a visible description of at least 5 characters.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      let imageObjectKeys = [];
+      if (image) {
+        const uploadRes = await api.uploads.uploadReportImage(image);
+        if (uploadRes?.data?.objectKey) {
+          imageObjectKeys.push(uploadRes.data.objectKey);
+        }
+      }
+
+      const reportPayload = {
+        reportType: isLost ? 'LOST' : 'FOUND',
+        title: title.trim(),
+        publicDescription: publicDescription.trim(),
+        category: category.trim(),
+        color: color.trim() || undefined,
+        brand: brand.trim() || undefined,
+        approximateLocation: approximateLocation.trim() || undefined,
+        privateDetails: privateClues.trim() || undefined,
+        imageObjectKeys,
+      };
+
+      const res = await api.reports.create(reportPayload);
+      setSuccessData(res.data);
+
+      // Reset fields
+      setTitle('');
+      setPublicDescription('');
+      setColor('');
+      setBrand('');
+      setApproximateLocation('');
+      setPrivateClues('');
+      clearImage();
+    } catch (err) {
+      setErrorMessage(err.message || 'Failed to submit report. Please check the fields and try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col pointer-events-none">
       <FloatingPanel title={`Report ${isLost ? 'Lost' : 'Found'} Item`} className="pointer-events-auto">
-        <form className="space-y-6" onSubmit={(event) => event.preventDefault()}>
+        {!user && (
+          <div className="mb-6 rounded-xl border border-signal-500/30 bg-signal-500/10 p-4 text-sm text-platinum-400">
+            <p className="font-semibold text-signal-300 flex items-center gap-2">
+              <LogIn size={16} /> Sign-in required
+            </p>
+            <p className="mt-1 text-xs text-platinum-500">
+              You must be logged in to create campus lost and found reports. Please click the account button in the header to sign in or create an account.
+            </p>
+          </div>
+        )}
+
+        {successData && (
+          <div className="mb-6 rounded-xl border border-signal-400/40 bg-signal-500/15 p-4 text-sm text-signal-200">
+            <p className="font-semibold flex items-center gap-2 text-signal-300">
+              <CheckCircle2 size={18} /> Report submitted successfully!
+            </p>
+            <p className="mt-1 text-xs text-platinum-400">
+              Your {isLost ? 'lost' : 'found'} report has been saved to the campus directory. Matching algorithms have queued this item for suggestions.
+            </p>
+            <p className="mt-2 text-[11px] font-mono text-platinum-500/80">ID: {successData.id}</p>
+          </div>
+        )}
+
+        {errorMessage && (
+          <div className="mb-6 rounded-xl border border-red-500/40 bg-red-950/40 p-4 text-sm text-red-300" role="alert">
+            <p className="font-semibold">Submission Error</p>
+            <p className="mt-1 text-xs">{errorMessage}</p>
+          </div>
+        )}
+
+        <form className="space-y-6" onSubmit={handleSubmit}>
           <section aria-label="Item photo" className="space-y-2">
             <div
               className={`overflow-hidden rounded-xl border ${imageError ? 'border-red-400/70' : 'border-mocha-700/70'} bg-mocha-900/50`}
@@ -114,22 +220,72 @@ const ReportFormView = ({ type }) => {
             </h3>
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
-                <label className="mb-1 block text-sm text-platinum-500">Item name</label>
-                <input type="text" placeholder="Example: blue water bottle" className="w-full rounded-lg border border-mocha-700 bg-mocha-800 p-3 text-platinum-500 transition focus:border-lavender-500 focus:outline-none" />
+                <label className="mb-1 block text-sm text-platinum-500">Item name *</label>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Example: blue water bottle"
+                  required
+                  className="w-full rounded-lg border border-mocha-700 bg-mocha-800 p-3 text-platinum-400 transition focus:border-lavender-500 focus:outline-none"
+                />
               </div>
               <div className="col-span-2">
-                <label className="mb-1 block text-sm text-platinum-500">Visible description</label>
-                <textarea placeholder="Describe its appearance, brand, or other visible details." className="h-24 w-full rounded-lg border border-mocha-700 bg-mocha-800 p-3 text-platinum-500 transition focus:border-lavender-500 focus:outline-none" />
+                <label className="mb-1 block text-sm text-platinum-500">Visible description *</label>
+                <textarea
+                  value={publicDescription}
+                  onChange={(e) => setPublicDescription(e.target.value)}
+                  placeholder="Describe its appearance, brand, or other visible details."
+                  required
+                  className="h-24 w-full rounded-lg border border-mocha-700 bg-mocha-800 p-3 text-platinum-400 transition focus:border-lavender-500 focus:outline-none"
+                />
               </div>
               <div>
                 <label className="mb-1 block text-sm text-platinum-500">Category</label>
-                <select className="w-full rounded-lg border border-mocha-700 bg-mocha-800 p-3 text-platinum-500 transition focus:border-lavender-500 focus:outline-none">
-                  <option>Electronics</option><option>Water Bottles</option><option>Bags</option>
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  className="w-full rounded-lg border border-mocha-700 bg-mocha-800 p-3 text-platinum-400 transition focus:border-lavender-500 focus:outline-none"
+                >
+                  <option value="Electronics">Electronics</option>
+                  <option value="Water Bottles">Water Bottles</option>
+                  <option value="Bags">Bags</option>
+                  <option value="Clothing">Clothing</option>
+                  <option value="Books">Books</option>
+                  <option value="Keys">Keys</option>
+                  <option value="Wallets">Wallets</option>
+                  <option value="Other">Other</option>
                 </select>
               </div>
               <div>
                 <label className="mb-1 block text-sm text-platinum-500">Main color</label>
-                <input type="text" placeholder="Example: blue" className="w-full rounded-lg border border-mocha-700 bg-mocha-800 p-3 text-platinum-500 transition focus:border-lavender-500 focus:outline-none" />
+                <input
+                  type="text"
+                  value={color}
+                  onChange={(e) => setColor(e.target.value)}
+                  placeholder="Example: blue"
+                  className="w-full rounded-lg border border-mocha-700 bg-mocha-800 p-3 text-platinum-400 transition focus:border-lavender-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-platinum-500">Brand / Manufacturer</label>
+                <input
+                  type="text"
+                  value={brand}
+                  onChange={(e) => setBrand(e.target.value)}
+                  placeholder="Example: Apple, Hydro Flask"
+                  className="w-full rounded-lg border border-mocha-700 bg-mocha-800 p-3 text-platinum-400 transition focus:border-lavender-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-platinum-500">Approximate location</label>
+                <input
+                  type="text"
+                  value={approximateLocation}
+                  onChange={(e) => setApproximateLocation(e.target.value)}
+                  placeholder="Example: Library 2nd floor"
+                  className="w-full rounded-lg border border-mocha-700 bg-mocha-800 p-3 text-platinum-400 transition focus:border-lavender-500 focus:outline-none"
+                />
               </div>
             </div>
           </div>
@@ -140,13 +296,26 @@ const ReportFormView = ({ type }) => {
               <Lock size={16} /> Private Ownership Clues
             </h3>
             <p className="text-xs leading-relaxed text-platinum-500">
-              Add a detail that can help confirm the item is yours. Keep it out of the public description, such as a hidden mark, a unique contents detail, or a distinctive scratch.
+              Add a detail that can help confirm the item is yours. Keep it out of the public description, such as a hidden mark, a unique contents detail, or a distinctive scratch. Stored encrypted and separate.
             </p>
-            <textarea placeholder="Add a private detail that only the owner would know." className="h-20 w-full rounded-lg border border-mocha-700 bg-mocha-900/50 p-3 text-platinum-500 transition focus:border-platinum-500 focus:outline-none" />
+            <textarea
+              value={privateClues}
+              onChange={(e) => setPrivateClues(e.target.value)}
+              placeholder="Add a private detail that only the owner would know."
+              className="h-20 w-full rounded-lg border border-mocha-700 bg-mocha-900/50 p-3 text-platinum-400 transition focus:border-platinum-500 focus:outline-none"
+            />
           </div>
 
-          <button className={`w-full rounded-xl py-4 font-medium shadow-lg transition ${isLost ? 'bg-lavender-600 text-white hover:bg-lavender-500' : 'bg-signal-500 text-[#111113] hover:bg-signal-400'}`}>
-            {isLost ? 'Submit lost-item report' : 'Submit found-item report'}
+          <button
+            type="submit"
+            disabled={loading || !user}
+            className={`w-full rounded-xl py-4 font-medium shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed ${
+              isLost
+                ? 'bg-lavender-600 text-white hover:bg-lavender-500'
+                : 'bg-signal-500 text-[#111113] hover:bg-signal-400'
+            }`}
+          >
+            {loading ? 'Submitting report...' : isLost ? 'Submit lost-item report' : 'Submit found-item report'}
           </button>
         </form>
       </FloatingPanel>

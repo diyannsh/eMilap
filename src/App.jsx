@@ -9,10 +9,12 @@ import SectionPage from './components/layout/SectionPage.jsx';
 import MatchesView from './components/matches/MatchesView.jsx';
 import ReportFormView from './components/reports/ReportFormView.jsx';
 import EmptyPlaceholder from './components/ui/EmptyPlaceholder.jsx';
-import { navigationItems } from './data/navigation.js';
+import UpdatesView from './components/dashboard/UpdatesView.jsx';
 import AccountSettingsView from './components/account/AccountSettingsView.jsx';
+import { navigationItems } from './data/navigation.js';
+import { AuthProvider } from './context/AuthContext.jsx';
 
-export default function App() {
+function AppContent() {
   const [activeView, setActiveView] = useState('dashboard');
   const curtain = useRef(null);
   const busy = useRef(false);
@@ -95,6 +97,7 @@ export default function App() {
     browse: <BrowseView />,
     matches: <MatchesView />,
     claims: <ClaimsView />,
+    notifications: <UpdatesView />,
     admin: <AdminView />,
     settings: <AccountSettingsView />,
   };
@@ -112,5 +115,13 @@ export default function App() {
       )}
       <div ref={curtain} className="page-curtain" aria-hidden="true" />
     </AppShell>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }

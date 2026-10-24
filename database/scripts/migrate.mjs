@@ -18,6 +18,14 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const migrationsDir = path.resolve(__dirname, '../migrations');
 
+// Auto-load .env from repository root if DATABASE_URL is not already in environment
+if (!process.env.DATABASE_URL) {
+  const envPath = path.resolve(__dirname, '../../.env');
+  if (fs.existsSync(envPath) && typeof process.loadEnvFile === 'function') {
+    try { process.loadEnvFile(envPath); } catch {}
+  }
+}
+
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
   console.error('ERROR: DATABASE_URL environment variable is required.');
@@ -27,6 +35,7 @@ if (!databaseUrl) {
 const isSslExplicitlyDisabled = databaseUrl.includes('sslmode=disable');
 const isSslRequired = !isSslExplicitlyDisabled && (
   databaseUrl.includes('sslmode=require') ||
+  databaseUrl.includes('supabase') ||
   (process.env.NODE_ENV === 'production' && !databaseUrl.includes('localhost') && !databaseUrl.includes('127.0.0.1') && !databaseUrl.includes('postgres:5432') && !databaseUrl.includes('172.'))
 );
 
@@ -108,7 +117,12 @@ async function run() {
   }
 }
 
+function sanitize(msg) {
+  if (!msg) return '';
+  return String(msg).replace(/:\/\/[^:]+:[^@]+@/g, '://[REDACTED]:[REDACTED]@');
+}
+
 run().catch((err) => {
-  console.error('Migration failed:', err);
+  console.error('Migration failed:', sanitize(err.message || err));
   process.exit(1);
 });
