@@ -1,4 +1,5 @@
 import { Router } from "express";
+import type { Notification } from "@prisma/client";
 import { prisma } from "../../db/client";
 
 export const notificationsRouter = Router();
@@ -17,7 +18,7 @@ notificationsRouter.get("/", async (req, res, next) => {
       take: 50,
     });
 
-    const unread = notifications.filter((n) => !n.readAt).length;
+    const unread = notifications.filter((n: Notification) => !n.readAt).length;
 
     res.json({
       data: notifications,

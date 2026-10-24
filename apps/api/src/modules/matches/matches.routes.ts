@@ -1,4 +1,5 @@
 import { Router } from "express";
+import type { ItemReport } from "@prisma/client";
 import { prisma } from "../../db/client";
 
 export const matchesRouter = Router();
@@ -20,7 +21,7 @@ matchesRouter.get("/", async (req, res, next) => {
         where: { reporterId: userId },
         select: { id: true },
       });
-      const reportIds = userReports.map((r) => r.id);
+      const reportIds = userReports.map((r: Pick<ItemReport, "id">) => r.id);
       if (reportIds.length > 0) {
         where.OR = [
           { reportAId: { in: reportIds } },

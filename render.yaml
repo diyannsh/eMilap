@@ -16,7 +16,7 @@ services:
     plan: free
     region: oregon
     branch: backend
-    buildCommand: npm ci --include=dev && npm run build:all
+    buildCommand: npm ci --include=dev && npx prisma generate --schema=database/prisma/schema.prisma && npm run build:all
     startCommand: node apps/api/dist/server.js
     healthCheckPath: /health/live
     autoDeploy: false

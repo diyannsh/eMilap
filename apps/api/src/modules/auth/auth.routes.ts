@@ -1,5 +1,6 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
+import type { CommunityMembership } from "@prisma/client";
 import { registerSchema, loginSchema } from "./auth.schemas";
 import { prisma } from "../../db/client";
 
@@ -126,7 +127,7 @@ authRouter.get("/me", async (req, res, next) => {
       req.session.destroy(() => {});
       return res.status(401).json({ error: { code: "UNAUTHORIZED", message: "Session user not found" } });
     }
-    const activeMembership = user.memberships.find(m => m.communityId === req.session?.communityId) || user.memberships[0];
+    const activeMembership = user.memberships.find((m: CommunityMembership) => m.communityId === req.session?.communityId) || user.memberships[0];
     const role = req.session.role || activeMembership?.role || "MEMBER";
     const communityId = req.session.communityId || activeMembership?.communityId || null;
 
