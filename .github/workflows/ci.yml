@@ -53,6 +53,13 @@ jobs:
           DATABASE_URL: "postgresql://foundnear:foundnear_dev@localhost:5432/foundnear?schema=public"
         run: npx prisma generate --schema database/prisma/schema.prisma
 
+      - name: Apply Database Migrations & Push Schema
+        env:
+          DATABASE_URL: "postgresql://foundnear:foundnear_dev@localhost:5432/foundnear?schema=public"
+        run: |
+          npm run db:migrate
+          npx prisma db push --schema database/prisma/schema.prisma --skip-generate
+
       - name: Typecheck Workspaces
         run: npm run typecheck
 
