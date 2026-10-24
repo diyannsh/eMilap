@@ -17,25 +17,41 @@ async function request(path, options = {}) {
     headers['Content-Type'] = 'application/json';
   }
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-    credentials: 'include', // Ensures session cookie (foundnear.sid) is sent & received
-  });
+  // Client-side timeout (12s) to prevent requests from hanging the UI indefinitely
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 12000);
 
-  const isJson = response.headers.get('content-type')?.includes('application/json');
-  const data = isJson ? await response.json() : await response.text();
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers,
+      credentials: 'include', // Ensures session cookie (foundnear.sid) is sent & received
+      signal: options.signal || controller.signal,
+    });
 
-  if (!response.ok) {
-    const errorMsg = data?.error?.message || data?.message || `Request failed with status ${response.status}`;
-    const error = new Error(errorMsg);
-    error.status = response.status;
-    error.code = data?.error?.code || 'ERROR';
-    error.data = data;
-    throw error;
+    const isJson = response.headers.get('content-type')?.includes('application/json');
+    const data = isJson ? await response.json() : await response.text();
+
+    if (!response.ok) {
+      const errorMsg = data?.error?.message || data?.message || `Request failed with status ${response.status}`;
+      const error = new Error(errorMsg);
+      error.status = response.status;
+      error.code = data?.error?.code || 'ERROR';
+      error.data = data;
+      throw error;
+    }
+
+    return data;
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      const timeoutErr = new Error('Network request timed out. Please check your connection and try again.');
+      timeoutErr.code = 'TIMEOUT';
+      throw timeoutErr;
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  return data;
 }
 
 export const api = {

@@ -12,12 +12,20 @@ function formatMessageText(text, onActionClick) {
   const lines = text.split('\n');
 
   return lines.map((line, lineIdx) => {
-    // Split by markdown links: [Link Text](#hash-or-view) or bold **bold**
-    const parts = line.split(/(\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*)/g);
+    // Split by markdown links (optionally wrapped in bold) or bold text
+    const parts = line.split(/(\*\*(?:\[[^\]]+\]\([^)]+\)|[^*]+)\*\*|\[[^\]]+\]\([^)]+\))/g);
 
     const formattedLine = parts.map((part, partIdx) => {
+      let isBold = false;
+      let raw = part;
+
+      if (raw.startsWith('**') && raw.endsWith('**') && raw.length >= 4) {
+        isBold = true;
+        raw = raw.slice(2, -2);
+      }
+
       // Check markdown link: [Label](#hash)
-      const linkMatch = part.match(/^\[([^\]]+)\]\((#[^)]+|[a-z_-]+)\)$/);
+      const linkMatch = raw.match(/^\[([^\]]+)\]\((#[^)]+|[a-z_-]+)\)$/);
       if (linkMatch) {
         const [, label, target] = linkMatch;
         const resolvedView =
@@ -25,7 +33,7 @@ function formatMessageText(text, onActionClick) {
           HASH_TO_VIEW[`#${target}`] ||
           target.replace(/^#/, '').replace(/-/g, '_');
 
-        return (
+        const linkEl = (
           <a
             key={partIdx}
             href={target.startsWith('#') ? target : `#${target}`}
@@ -40,13 +48,21 @@ function formatMessageText(text, onActionClick) {
             {label}
           </a>
         );
+
+        return isBold ? (
+          <strong key={partIdx} className="emilap-bold-text">
+            {linkEl}
+          </strong>
+        ) : (
+          linkEl
+        );
       }
 
-      // Check bold
-      if (part.startsWith('**') && part.endsWith('**') && part.length >= 4) {
+      // Check bold text
+      if (isBold) {
         return (
           <strong key={partIdx} className="emilap-bold-text">
-            {part.slice(2, -2)}
+            {raw}
           </strong>
         );
       }
@@ -155,24 +171,42 @@ export default function LostFoundChatbot({ visible = true, onNavigate }) {
       };
 
       setMessages((prev) => [...prev, botMsg]);
-    } catch {
+    } catch (err) {
       // Graceful offline/local fallback: answer using local campus knowledge base
-      const matchResult = matchLostFoundQuery(text, history);
-      const botTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      try {
+        const matchResult = matchLostFoundQuery(text, history);
+        const botTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const actions = matchResult.actions || (matchResult.action ? [matchResult.action] : null);
 
-      const actions = matchResult.actions || (matchResult.action ? [matchResult.action] : null);
+        const botMsg = {
+          id: `bot-${Date.now()}`,
+          sender: 'bot',
+          text: matchResult.text || "I can help you navigate campus lost & found using the links below.",
+          action: matchResult.action || actions?.[0] || null,
+          actions,
+          showQuickQueries: Boolean(matchResult.quickQueries),
+          time: botTime,
+        };
 
-      const botMsg = {
-        id: `bot-${Date.now()}`,
-        sender: 'bot',
-        text: matchResult.text,
-        action: matchResult.action || actions?.[0] || null,
-        actions,
-        showQuickQueries: Boolean(matchResult.quickQueries),
-        time: botTime,
-      };
-
-      setMessages((prev) => [...prev, botMsg]);
+        setMessages((prev) => [...prev, botMsg]);
+      } catch {
+        // Fallback safety guarantee: never leave chat hanging
+        const botTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `bot-${Date.now()}`,
+            sender: 'bot',
+            text: "To report a lost or found item, please use [Report Lost](#report-lost) or [Report Found](#report-found) in the navigation.",
+            actions: [
+              { label: 'Report Lost Item', view: 'report_lost', url: '#report-lost' },
+              { label: 'Report Found Item', view: 'report_found', url: '#report-found' },
+              { label: 'Browse Campus Listings', view: 'browse', url: '#browse' },
+            ],
+            time: botTime,
+          },
+        ]);
+      }
     } finally {
       setIsTyping(false);
     }

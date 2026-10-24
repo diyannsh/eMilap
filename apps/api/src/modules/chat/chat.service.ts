@@ -196,6 +196,9 @@ export class ChatService {
       };
     }
 
+    const defaultNote =
+      "Deterministic campus search assistant active (GEMINI_API_KEY not configured). To enable optional live AI responses, configure GEMINI_API_KEY with a model available on your Google AI Studio free tier. Billing is never required.";
+
     // 4. Greetings intent
     const isGreeting = /^(hi|hello|hey|good morning|good afternoon|good evening|howdy|sup|yo|greetings)\b/i.test(lowerMsg);
     if (isGreeting && lowerMsg.split(/\s+/).length <= 4) {
@@ -216,12 +219,11 @@ export class ChatService {
         communityId: commId,
         communityName: commName,
         configuredModel: false,
-        note: "Deterministic campus assistant active.",
+        note: defaultNote,
       };
     }
 
-    // 5. Multi-turn Follow-up Context Resolution
-    // If user says "where do I report it?", "how do I report?", "where can I submit it?", inspect history
+    // 5. Reporting Inquiries & Multi-turn Follow-up Context Resolution
     const isGenericReportQuery =
       lowerMsg.includes("where do i report") ||
       lowerMsg.includes("how do i report") ||
@@ -229,26 +231,28 @@ export class ChatService {
       lowerMsg.includes("how can i report") ||
       lowerMsg.includes("how to report it") ||
       lowerMsg.includes("where to report") ||
+      lowerMsg.includes("how to report") ||
       lowerMsg.includes("what should i do next") ||
-      lowerMsg.includes("how do i submit it");
+      lowerMsg.includes("how do i submit") ||
+      lowerMsg.includes("where can i submit");
 
-    if (isGenericReportQuery && history.length > 0) {
-      // Look back through prior user messages to detect if user lost or found an item
+    if (isGenericReportQuery) {
+      // Look at current message + prior user messages in history to detect if user lost or found an item
       const pastUserMessages = history.filter((h) => h.role === "user").map((h) => h.content.toLowerCase());
-      const pastContext = pastUserMessages.join(" ");
+      const fullContext = (pastUserMessages.join(" ") + " " + lowerMsg).toLowerCase();
 
-      const wasLost = pastContext.includes("lost") || pastContext.includes("missing") || pastContext.includes("misplaced") || pastContext.includes("can't find");
-      const wasFound = pastContext.includes("found") || pastContext.includes("picked up") || pastContext.includes("turned in");
+      const wasLost = fullContext.includes("lost") || fullContext.includes("missing") || fullContext.includes("misplaced") || fullContext.includes("can't find");
+      const wasFound = fullContext.includes("found") || fullContext.includes("picked up") || fullContext.includes("turned in");
 
       if (wasLost && !wasFound) {
-        const actions = [ROUTE_ACTIONS.report_lost, ROUTE_ACTIONS.browse];
+        const actions = [ROUTE_ACTIONS.report_lost, ROUTE_ACTIONS.browse, ROUTE_ACTIONS.matches];
         return {
           reply:
-            `Based on our conversation, you can report your lost item right away by opening **[Report Lost](#report-lost)**.\n\n` +
-            `**Tips for a successful report:**\n` +
-            `• Specify the item category, title, approximate campus location, and when you last saw it.\n` +
-            `• Provide distinctive details (colors, brand, stickers, scratches).\n` +
-            `• Add an encrypted private clue (such as serial numbers or hidden pouch contents) so only you can claim it once found.`,
+            `To report a lost item on e-Milap:\n\n` +
+            `1. Open **[Report Lost](#report-lost)** in the navigation.\n` +
+            `2. Select the item category, title, approximate campus location, and when you last saw it.\n` +
+            `3. Add an encrypted private clue (such as serial numbers, engraved initials, or pouch contents) so only you can verify ownership once it is found.\n` +
+            `4. You can also explore existing records in **[Campus Listings](#browse)** to see if someone already turned it in.`,
           matchedReports: [],
           actions,
           action: actions[0],
@@ -256,7 +260,7 @@ export class ChatService {
           communityId: commId,
           communityName: commName,
           configuredModel: false,
-          note: "Deterministic contextual follow-up.",
+          note: defaultNote,
         };
       }
 
@@ -276,9 +280,27 @@ export class ChatService {
           communityId: commId,
           communityName: commName,
           configuredModel: false,
-          note: "Deterministic contextual follow-up.",
+          note: defaultNote,
         };
       }
+
+      // If neither or both
+      const actions = [ROUTE_ACTIONS.report_lost, ROUTE_ACTIONS.report_found, ROUTE_ACTIONS.browse];
+      return {
+        reply:
+          `To report an item on e-Milap:\n\n` +
+          `• **If you lost an item:** Click **[Report Lost](#report-lost)** to log details and submit encrypted verification clues.\n` +
+          `• **If you found an item:** Click **[Report Found](#report-found)** to describe where you found it or deposit it at Admin Block Room 104.\n` +
+          `• Check **[Campus Listings](#browse)** to browse all current active listings.`,
+        matchedReports: [],
+        actions,
+        action: actions[0],
+        provider: "deterministic-retrieval",
+        communityId: commId,
+        communityName: commName,
+        configuredModel: false,
+        note: defaultNote,
+      };
     }
 
     // 6. Explicit Feature & Policy Guidance
@@ -530,9 +552,7 @@ export class ChatService {
       }
     }
 
-    const defaultNote =
-      llmFallbackNote ||
-      "Deterministic campus search assistant active (GEMINI_API_KEY not configured). To enable optional live AI responses, configure GEMINI_API_KEY with a model available on your Google AI Studio free tier. Billing is never required.";
+    const activeNote = llmFallbackNote || defaultNote;
 
     // 10. Ambiguity Handling: If query mentions items/tokens but lacks explicit Lost vs Found intent
     // e.g. "blue backpack", "keys", "calculator in library", "umbrella", "airpods"
@@ -573,7 +593,7 @@ export class ChatService {
         communityId: commId,
         communityName: commName,
         configuredModel: false,
-        note: defaultNote,
+        note: activeNote,
       };
     }
 
@@ -602,7 +622,7 @@ export class ChatService {
           communityId: commId,
           communityName: commName,
           configuredModel: false,
-          note: defaultNote,
+          note: activeNote,
         };
       }
 
@@ -620,7 +640,7 @@ export class ChatService {
         communityId: commId,
         communityName: commName,
         configuredModel: false,
-        note: defaultNote,
+        note: activeNote,
       };
     }
 
@@ -648,7 +668,7 @@ export class ChatService {
           communityId: commId,
           communityName: commName,
           configuredModel: false,
-          note: defaultNote,
+          note: activeNote,
         };
       }
 
@@ -665,7 +685,7 @@ export class ChatService {
         communityId: commId,
         communityName: commName,
         configuredModel: false,
-        note: defaultNote,
+        note: activeNote,
       };
     }
 
@@ -694,7 +714,7 @@ export class ChatService {
         communityId: commId,
         communityName: commName,
         configuredModel: false,
-        note: defaultNote,
+        note: activeNote,
       };
     }
 
@@ -714,7 +734,7 @@ export class ChatService {
       communityId: commId,
       communityName: commName,
       configuredModel: false,
-      note: defaultNote,
+      note: activeNote,
     };
   }
 
@@ -764,10 +784,25 @@ export class ChatService {
 
     const requestedModel = (process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
 
-    // Models to attempt: primary configured model, with fallback candidate if 404
-    const modelsToTry = [requestedModel];
-    if (requestedModel !== "gemini-2.5-flash-lite") {
-      modelsToTry.push("gemini-2.5-flash-lite");
+    // Dynamically check which models are enabled for this API key project
+    const availableModels = await this.getAvailableGeminiModels(geminiKey);
+
+    let modelsToTry: string[];
+    if (availableModels.length > 0) {
+      const flashModels = availableModels.filter((m) => m.toLowerCase().includes("flash"));
+      const otherModels = availableModels.filter((m) => !m.toLowerCase().includes("flash"));
+      modelsToTry = [
+        ...(availableModels.includes(requestedModel) ? [requestedModel] : []),
+        ...flashModels,
+        ...otherModels,
+      ].filter((m, i, arr) => arr.indexOf(m) === i).slice(0, 3);
+    } else {
+      modelsToTry = [
+        requestedModel,
+        "gemini-2.0-flash",
+        "gemini-1.5-flash",
+        "gemini-2.5-flash-lite",
+      ].filter((m, i, arr) => m && arr.indexOf(m) === i);
     }
 
     // Build multi-turn contents array
@@ -795,7 +830,10 @@ export class ChatService {
 
     let lastError: string = "Unknown error";
 
-    for (const model of modelsToTry) {
+    for (const model of modelsToTry.slice(0, 2)) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3500);
+
       try {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(geminiKey)}`;
         const payload: any = {
@@ -803,15 +841,11 @@ export class ChatService {
           generationConfig: { maxOutputTokens: 350, temperature: 0.2 },
         };
 
-        // If contents has history, provide system_instruction separately or in first user part
         if (contents.length > 1) {
           payload.systemInstruction = {
             parts: [{ text: systemPrompt }],
           };
         }
-
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 8000);
 
         const res = await fetch(url, {
           method: "POST",
@@ -819,7 +853,6 @@ export class ChatService {
           body: JSON.stringify(payload),
           signal: controller.signal,
         });
-        clearTimeout(timeout);
 
         if (res.status === 404) {
           lastError = `Model '${model}' was not found or has been retired for this API key project (HTTP 404).`;
@@ -847,12 +880,45 @@ export class ChatService {
           return { reply: text.trim(), provider: "gemini", model };
         }
       } catch (err: any) {
-        lastError = err.name === "AbortError" ? "Gemini API request timed out (8s limit)" : err.message;
+        lastError = err.name === "AbortError" ? "Gemini API request timed out (3.5s limit)" : err.message;
         break;
+      } finally {
+        clearTimeout(timeout);
       }
     }
 
     return { reply: null, provider: "gemini", model: requestedModel, errorReason: lastError };
+  }
+
+  private static cachedAvailableModels: { list: string[]; timestamp: number } | null = null;
+
+  private async getAvailableGeminiModels(apiKey: string): Promise<string[]> {
+    const now = Date.now();
+    if (ChatService.cachedAvailableModels && now - ChatService.cachedAvailableModels.timestamp < 30 * 60 * 1000) {
+      return ChatService.cachedAvailableModels.list;
+    }
+
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 2500);
+      const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`;
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeout);
+
+      if (!res.ok) return [];
+      const data: any = await res.json();
+      if (Array.isArray(data?.models)) {
+        const list = data.models
+          .filter((m: any) => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes("generateContent"))
+          .map((m: any) => String(m.name || "").replace(/^models\//, ""))
+          .filter(Boolean);
+        ChatService.cachedAvailableModels = { list, timestamp: now };
+        return list;
+      }
+    } catch {
+      // Ignore discovery errors, fallback to static models
+    }
+    return [];
   }
 }
 

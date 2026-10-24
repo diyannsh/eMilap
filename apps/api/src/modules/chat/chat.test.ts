@@ -296,5 +296,76 @@ describe("Chatbot Module Security & Scoping", () => {
       // Never leak the invalid key in the response note
       expect(res.note).not.toContain("invalid-key");
     });
+
+    it("accurately handles user asking 'Hi, I lost something. Where can I report it?' on the first turn", async () => {
+      delete process.env.GEMINI_API_KEY;
+
+      const res = await service.handleMessage("Hi, I lost something. Where can I report it?", undefined, []);
+      expect(res.reply).toContain("[Report Lost](#report-lost)");
+      expect(res.reply).not.toContain("I couldn't find an existing found report matching");
+      expect(res.actions).toBeDefined();
+      const views = res.actions?.map((a) => a.view);
+      expect(views).toContain("report_lost");
+    });
+
+    it("accurately handles user asking 'Where can I report a found item?' on the first turn", async () => {
+      delete process.env.GEMINI_API_KEY;
+
+      const res = await service.handleMessage("Where can I report an item I found?", undefined, []);
+      expect(res.reply).toContain("[Report Found](#report-found)");
+      expect(res.reply).toContain("Admin Block, Room 104");
+      expect(res.actions).toBeDefined();
+      const views = res.actions?.map((a) => a.view);
+      expect(views).toContain("report_found");
+    });
+
+    it("handles Gemini API timeouts gracefully without hanging", async () => {
+      process.env.GEMINI_API_KEY = "test-ai-key-12345";
+
+      vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+        const err = new Error("The operation was aborted");
+        err.name = "AbortError";
+        throw err;
+      });
+
+      const res = await service.handleMessage("I lost my umbrella in the cafeteria");
+      expect(res.configuredModel).toBe(false);
+      expect(res.provider).toBe("deterministic-retrieval");
+      expect(res.note).toContain("timed out");
+    });
+
+    it("dynamically resolves active Gemini models using models list", async () => {
+      process.env.GEMINI_API_KEY = "test-ai-key-12345";
+
+      let calledUrl = "";
+      vi.spyOn(globalThis, "fetch").mockImplementation(async (url: any) => {
+        const u = String(url);
+        if (u.includes("/v1beta/models?key=")) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              models: [
+                { name: "models/gemini-2.0-flash", supportedGenerationMethods: ["generateContent"] },
+              ],
+            }),
+          } as any;
+        }
+
+        calledUrl = u;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            candidates: [{ content: { parts: [{ text: "Dynamic model response" }] } }],
+          }),
+        } as any;
+      });
+
+      const res = await service.handleMessage("Where is my calculator?");
+      expect(res.configuredModel).toBe(true);
+      expect(res.provider).toBe("gemini");
+      expect(calledUrl).toContain("gemini-2.0-flash");
+    });
   });
 });

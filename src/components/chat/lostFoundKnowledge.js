@@ -94,8 +94,11 @@ const COMMON_ITEMS_REGEX = /\b(bag|backpack|wallet|purse|keys|keychain|phone|iph
 export function matchLostFoundQuery(rawInput, history = []) {
   const query = rawInput.toLowerCase().trim();
 
-  // 1. Greetings
-  if (/^(hi|hello|hey|greetings|help|good morning|good afternoon|good evening|howdy|sup|yo)\b/i.test(query)) {
+  // 1. Greetings (short standalone greetings)
+  const isGreetingWord = /^(hi|hello|hey|greetings|help|good morning|good afternoon|good evening|howdy|sup|yo)\b/i.test(query);
+  const isShortGreeting = isGreetingWord && query.split(/\s+/).length <= 3;
+
+  if (isShortGreeting) {
     const actions = [
       { label: 'Report Lost Item', view: 'report_lost', url: '#report-lost' },
       { label: 'Report Found Item', view: 'report_found', url: '#report-found' },
@@ -109,37 +112,40 @@ export function matchLostFoundQuery(rawInput, history = []) {
     };
   }
 
-  // 2. Follow-up query context resolution (e.g. "where do I report it?", "how to submit")
-  if (
+  // 2. Report inquiries and follow-up query context resolution
+  const isReportInquiry =
     query.includes("where do i report") ||
     query.includes("how do i report") ||
+    query.includes("where can i report") ||
+    query.includes("how can i report") ||
     query.includes("how to report it") ||
     query.includes("where to report") ||
-    query.includes("what should i do next")
-  ) {
-    if (history && history.length > 0) {
-      const pastUserMessages = history.filter((h) => h.role === "user").map((h) => h.content.toLowerCase());
-      const pastContext = pastUserMessages.join(" ");
+    query.includes("what should i do next") ||
+    query.includes("how do i submit") ||
+    query.includes("how do i file");
 
-      const wasLost = pastContext.includes("lost") || pastContext.includes("missing") || pastContext.includes("misplaced");
-      const wasFound = pastContext.includes("found") || pastContext.includes("picked up");
+  if (isReportInquiry) {
+    const pastUserMessages = (history || []).filter((h) => h.role === "user").map((h) => h.content.toLowerCase());
+    const fullContext = (pastUserMessages.join(" ") + " " + query).toLowerCase();
 
-      if (wasLost && !wasFound) {
-        return {
-          text: TOPIC_RESPONSES.report_lost.content,
-          action: TOPIC_RESPONSES.report_lost.suggestedAction,
-          actions: [TOPIC_RESPONSES.report_lost.suggestedAction, { label: 'Browse Campus Listings', view: 'browse', url: '#browse' }],
-        };
-      }
-      if (wasFound && !wasLost) {
-        return {
-          text: TOPIC_RESPONSES.report_found.content,
-          action: TOPIC_RESPONSES.report_found.suggestedAction,
-          actions: [TOPIC_RESPONSES.report_found.suggestedAction, { label: 'Browse Campus Listings', view: 'browse', url: '#browse' }],
-        };
-      }
+    const wasLost = fullContext.includes("lost") || fullContext.includes("missing") || fullContext.includes("misplaced") || fullContext.includes("can't find");
+    const wasFound = fullContext.includes("found") || fullContext.includes("picked up") || fullContext.includes("turned in");
+
+    if (wasLost && !wasFound) {
+      return {
+        text: TOPIC_RESPONSES.report_lost.content,
+        action: TOPIC_RESPONSES.report_lost.suggestedAction,
+        actions: [TOPIC_RESPONSES.report_lost.suggestedAction, { label: 'Browse Campus Listings', view: 'browse', url: '#browse' }],
+      };
     }
-    // Generic fallback if no prior context
+    if (wasFound && !wasLost) {
+      return {
+        text: TOPIC_RESPONSES.report_found.content,
+        action: TOPIC_RESPONSES.report_found.suggestedAction,
+        actions: [TOPIC_RESPONSES.report_found.suggestedAction, { label: 'Browse Campus Listings', view: 'browse', url: '#browse' }],
+      };
+    }
+    // Generic fallback if neither or both lost & found mentioned
     return {
       text: "To file a report on eMilap:\n• If you lost an item, open [Report Lost](#report-lost).\n• If you found someone's belongings, open [Report Found](#report-found).",
       action: TOPIC_RESPONSES.report_lost.suggestedAction,
