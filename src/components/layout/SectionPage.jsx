@@ -1,4 +1,3 @@
-import { useLayoutEffect } from 'react';
 import './SectionPage.css';
 
 const sectionDescriptions = {
@@ -14,10 +13,6 @@ const sectionDescriptions = {
 };
 
 export default function SectionPage({ title, children, transitionPending = false }) {
-  useLayoutEffect(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
-  }, []);
-
   return (
     <div className="section-page" data-transition-content={transitionPending ? '' : undefined}>
       <div className="section-page-content">

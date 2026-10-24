@@ -190,7 +190,7 @@ export default function AppShell({ activeView, navigationItems, onNavigate, tran
             {(activeView !== 'dashboard' || transitioning) && (
               <button
                 type="button"
-                onClick={() => onNavigate('dashboard')}
+                onClick={(e) => { e.preventDefault(); onNavigate('dashboard'); }}
                 className="section-nav-back rounded-full border border-[#6F4E37]/50 bg-[#2C1C16]/85 px-4 py-2 text-sm font-medium text-[#E5E4E2] backdrop-blur transition-colors hover:border-[#E6E0F0]/60 hover:bg-[#3D261E]"
               >
                 ← All sections
@@ -227,7 +227,7 @@ export default function AppShell({ activeView, navigationItems, onNavigate, tran
             {activeView !== 'dashboard' && (
               <button
                 type="button"
-                onClick={() => onNavigate('dashboard')}
+                onClick={(e) => { e.preventDefault(); onNavigate('dashboard'); }}
                 className="rounded-full border border-[#6F4E37]/60 bg-[#2C1C16]/90 px-3 py-1.5 text-xs font-medium text-[#E5E4E2] backdrop-blur transition-colors hover:border-[#E6E0F0]/60 hover:bg-[#3D261E]"
               >
                 ← Back

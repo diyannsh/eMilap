@@ -47,6 +47,9 @@ function AppContent() {
         index: targetIndex >= 0 ? targetIndex : 0,
         fromHero: Boolean(fromHero),
       };
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        window.sessionStorage.setItem('activeSectionIdx', String(lastSectionRef.current.index));
+      }
     } else if (fromHero) {
       lastSectionRef.current = { id: 'dashboard', index: -1, fromHero: true };
     }
@@ -88,7 +91,6 @@ function AppContent() {
   goRef.current = go;
 
   useEffect(() => {
-    const previousScrollRestoration = window.history.scrollRestoration;
     window.history.scrollRestoration = 'manual';
 
     const currentRoute = parseCurrentRoute();
@@ -119,7 +121,6 @@ function AppContent() {
     return () => {
       window.removeEventListener('popstate', handleRouteSync);
       window.removeEventListener('hashchange', handleRouteSync);
-      window.history.scrollRestoration = previousScrollRestoration;
     };
   }, []);
 
@@ -138,17 +139,25 @@ function AppContent() {
 
   return (
     <AppShell activeView={activeView} navigationItems={navigationItems} onNavigate={go}>
-      {activeView === 'dashboard' ? (
+      <div
+        className="overview-layer"
+        style={{ visibility: activeView === 'dashboard' ? 'visible' : 'hidden', pointerEvents: activeView === 'dashboard' ? 'auto' : 'none' }}
+        aria-hidden={activeView !== 'dashboard'}
+      >
         <HomePage
           items={navigationItems}
           onSelect={go}
           restoreSection={lastSectionRef.current}
           onSliderChange={setInSectionsSlider}
         />
-      ) : (
+      </div>
+
+      {activeView !== 'dashboard' && (
+        <div className="section-view-overlay" data-lenis-prevent>
         <SectionPage title={sectionTitle} sectionIndex={Math.max(0, sectionIndex)}>
           {views[activeView] ?? <EmptyPlaceholder title={sectionTitle} />}
         </SectionPage>
+        </div>
       )}
 
       {/* Campus Lost & Found AI Chatbot - present on Main Interface Home Screen and all Section Detail Pages; hidden when exploring sections slider */}

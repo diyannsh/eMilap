@@ -46,27 +46,48 @@ export default function HomePage({ items, onSelect, restoreSection = null, onSli
   const progressLabelRef = useRef(null);
 
   const sections = items.filter((item) => item.id !== 'dashboard');
-  const [activeIndex, setActiveIndex] = useState(0);
-  const activeIndexRef = useRef(0);
+  const savedIndex = Number.parseInt(window.sessionStorage.getItem('activeSectionIdx') ?? '', 10);
+  const initialIndex = Number.isInteger(savedIndex) && savedIndex >= 0
+    ? Math.min(savedIndex, Math.max(0, sections.length - 1))
+    : 0;
+  const [activeIndex, setActiveIndex] = useState(initialIndex);
+  const activeIndexRef = useRef(initialIndex);
   const [showSectionProgress, setShowSectionProgress] = useState(false);
 
   useLayoutEffect(() => {
-    const lenis = new Lenis({ smoothWheel: true, lerp: 0.1 });
+    let ctx;
+    let lenis;
+    let tick;
+    lenis = new Lenis({ smoothWheel: true, lerp: 0.1 });
     lenisRef.current = lenis;
     lenis.on('scroll', ScrollTrigger.update);
-    const tick = (time) => lenis.raf(time * 1000);
+    tick = (time) => lenis.raf(time * 1000);
     gsap.ticker.add(tick);
     gsap.ticker.lagSmoothing(0);
 
     // On mobile we skip the horizontal pin — cards are displayed vertically via CSS.
     const isMobile = window.matchMedia('(max-width: 700px)').matches;
 
-    const ctx = gsap.context(() => {
+    ctx = gsap.context(() => {
       gsap.from('.hm-char', { yPercent: 115, duration: 1, ease: 'power4.out', stagger: 0.06 });
       gsap.from('.hm-fade', { y: 24, opacity: 0, duration: 0.8, ease: 'power3.out', stagger: 0.1, delay: 0.35 });
 
       const track = trackRef.current;
       const distance = () => Math.max(0, track.scrollWidth - window.innerWidth);
+
+      const storedIndex = Number.parseInt(window.sessionStorage.getItem('activeSectionIdx') ?? '', 10);
+      const storedRestoreIndex = Number.isInteger(storedIndex) && storedIndex >= 0
+        ? storedIndex
+        : restoreSection?.index;
+      const restoreIndex = typeof storedRestoreIndex === 'number'
+        ? Math.min(storedRestoreIndex, Math.max(0, sections.length - 1))
+        : storedRestoreIndex;
+      const restoreProgress = typeof restoreIndex === 'number' && restoreIndex >= 0 && !restoreSection?.fromHero
+        ? Math.min(1, Math.max(0, restoreIndex / Math.max(1, sections.length - 1)))
+        : 0;
+
+      // Establish the restored position before ScrollTrigger creates or renders its tween.
+      gsap.set(track, { x: -distance() * restoreProgress });
 
       // Skip horizontal pin on mobile — vertical CSS layout handles it
       if (isMobile) return;
@@ -106,6 +127,7 @@ export default function HomePage({ items, onSelect, restoreSection = null, onSli
             if (progressThumbRef.current) progressThumbRef.current.style.transform = `translateY(${progress * Math.max(0, sections.length - 1) * step}px)`;
             if (index !== activeIndexRef.current) {
               activeIndexRef.current = index;
+              window.sessionStorage.setItem('activeSectionIdx', String(index));
               setActiveIndex(index);
             }
           },
@@ -116,15 +138,15 @@ export default function HomePage({ items, onSelect, restoreSection = null, onSli
 
       // SYNCHRONOUS PRE-PAINT POSITION RESTORATION:
       // If returning to a section slide, restore scroll and track transform BEFORE browser paints!
-      if (restoreSection && typeof restoreSection.index === 'number' && restoreSection.index >= 0 && !restoreSection.fromHero) {
+      if (typeof restoreIndex === 'number' && restoreIndex >= 0 && !restoreSection?.fromHero) {
         const total = Math.max(1, sections.length - 1);
-        const progress = Math.min(1, Math.max(0, restoreSection.index / total));
+        const progress = Math.min(1, Math.max(0, restoreIndex / total));
         const totalDist = distance();
         const st = tween.scrollTrigger;
         const targetScroll = Math.round(st.start + totalDist * progress);
 
         // 1. Instantly apply track transform so there is zero layout jump or flicker
-        track.style.transform = `translate3d(${-totalDist * progress}px, 0px, 0px)`;
+        gsap.set(track, { x: -totalDist * progress });
         tween.progress(progress);
 
         // 2. Instantly scroll window and Lenis
@@ -141,8 +163,8 @@ export default function HomePage({ items, onSelect, restoreSection = null, onSli
         if (barRef.current) barRef.current.style.transform = `scaleX(${progress})`;
         if (progressFillRef.current) progressFillRef.current.style.transform = `translateX(-50%) scaleY(${progress})`;
         if (progressThumbRef.current) progressThumbRef.current.style.transform = `translateY(${progress * (sections.length - 1) * step}px)`;
-        setActiveIndex(restoreSection.index);
-        activeIndexRef.current = restoreSection.index;
+        setActiveIndex(restoreIndex);
+        activeIndexRef.current = restoreIndex;
         setShowSectionProgress(true);
         onSliderChange?.(true);
       }
@@ -150,14 +172,13 @@ export default function HomePage({ items, onSelect, restoreSection = null, onSli
 
     return () => {
       onSliderChange?.(false);
-      ctx.revert();
-      gsap.ticker.remove(tick);
-      gsap.ticker.lagSmoothing(500, 33);
-      lenis.destroy();
+      ctx?.revert();
+      if (tick) gsap.ticker.remove(tick);
+      lenis?.destroy();
       lenisRef.current = null;
       stRef.current = null;
     };
-  }, [restoreSection]);
+  }, []);
 
   const scrollToSections = () => {
     const top = stRef.current?.start ?? 0;
