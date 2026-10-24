@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Bot, MessageSquare, Send, Sparkles, X } from 'lucide-react';
+import { ArrowRight, Bot, MessageSquare, Send, ShieldAlert, Sparkles, X } from 'lucide-react';
 import { QUICK_QUERIES, matchLostFoundQuery } from './lostFoundKnowledge.js';
 import { api } from '../../lib/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -45,7 +45,7 @@ export default function LostFoundChatbot({ visible = true, onNavigate }) {
     {
       id: 'welcome',
       sender: 'bot',
-      text: "Hello! 👋 I'm **Milap.ai**, your campus lost & found assistant.\n\nI can answer questions regarding lost items, reporting found goods, proving ownership, or finding the campus desk. Select a quick query below or type your question!",
+      text: "Hello! 👋 I'm **Milap.ai**, your campus lost & found assistant.\n\nI can answer questions regarding lost items, reporting found goods, proving ownership, or finding the campus desk. Select a quick query below or type your question!\n\n*(Privacy note: Never enter passwords, card numbers, or secret ownership clues here.)*",
       showQuickQueries: true,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
@@ -249,6 +249,12 @@ export default function LostFoundChatbot({ visible = true, onNavigate }) {
             )}
 
             <div ref={messagesEndRef} />
+          </div>
+
+          {/* Privacy Notice Banner */}
+          <div className="emilap-chat-privacy-notice" role="note" aria-label="Privacy notice">
+            <ShieldAlert size={12} className="text-[#C68B59] shrink-0" />
+            <span>Public assistant only. Never submit passwords, card details, or private clues.</span>
           </div>
 
           {/* Input Bar */}

@@ -114,7 +114,7 @@ export class ChatService {
         communityId: commId,
         communityName: commName,
         configuredModel: false,
-        note: "Deterministic campus search assistant active (Optional AI model not configured). To enable optional LLM generation, set GEMINI_API_KEY or OPENAI_API_KEY in the API environment.",
+        note: "Deterministic campus search assistant active (Optional AI model not configured). To enable optional LLM generation, set GEMINI_API_KEY in the API environment with a model available on your free tier.",
       };
     }
 
@@ -139,7 +139,7 @@ export class ChatService {
         communityId: commId,
         communityName: commName,
         configuredModel: false,
-        note: "Deterministic campus search assistant active (Optional AI model not configured). To enable optional LLM generation, set GEMINI_API_KEY or OPENAI_API_KEY in the API environment.",
+        note: "Deterministic campus search assistant active (Optional AI model not configured). To enable optional LLM generation, set GEMINI_API_KEY in the API environment with a model available on your free tier.",
       };
     }
 
@@ -153,7 +153,7 @@ export class ChatService {
         communityId: commId,
         communityName: commName,
         configuredModel: false,
-        note: "Deterministic campus search assistant active (Optional AI model not configured). To enable optional LLM generation, set GEMINI_API_KEY or OPENAI_API_KEY in the API environment.",
+        note: "Deterministic campus search assistant active (Optional AI model not configured). To enable optional LLM generation, set GEMINI_API_KEY in the API environment with a model available on your free tier.",
       };
     }
 
@@ -168,7 +168,7 @@ export class ChatService {
         communityId: commId,
         communityName: commName,
         configuredModel: false,
-        note: "Deterministic campus search assistant active (Optional AI model not configured). To enable optional LLM generation, set GEMINI_API_KEY or OPENAI_API_KEY in the API environment.",
+        note: "Deterministic campus search assistant active (Optional AI model not configured). To enable optional LLM generation, set GEMINI_API_KEY in the API environment with a model available on your free tier.",
       };
     }
 
@@ -196,24 +196,29 @@ export class ChatService {
     const hasGemini = Boolean(process.env.GEMINI_API_KEY && !process.env.GEMINI_API_KEY.includes("replace-"));
     const hasOpenAI = Boolean(process.env.OPENAI_API_KEY && !process.env.OPENAI_API_KEY.includes("replace-"));
 
+    let llmFallbackNote: string | null = null;
+
     if (hasGemini || hasOpenAI) {
-      try {
-        const llmReply = await this.invokeOptionalLLM(trimmed, matched, commName);
-        if (llmReply) {
-          return {
-            reply: llmReply,
-            matchedReports: matched.slice(0, 5),
-            provider: hasGemini ? "gemini" : "openai",
-            communityId: commId,
-            communityName: commName,
-            configuredModel: true,
-            note: `Grounded response generated using ${hasGemini ? "Gemini" : "OpenAI"} scoped strictly to public reports in ${commName}.`,
-          };
-        }
-      } catch (err: any) {
-        console.warn(`Optional LLM invocation failed, falling back to deterministic retrieval: ${err.message}`);
+      const llmResult = await this.invokeOptionalLLM(trimmed, matched, commName);
+      if (llmResult.reply) {
+        return {
+          reply: llmResult.reply,
+          matchedReports: matched.slice(0, 5),
+          provider: llmResult.provider,
+          communityId: commId,
+          communityName: commName,
+          configuredModel: true,
+          note: `Grounded response generated using Gemini (${llmResult.model}) scoped strictly to public reports in ${commName}.`,
+        };
+      }
+      if (llmResult.errorReason) {
+        llmFallbackNote = `Live Gemini response unavailable (${llmResult.errorReason}). Fallen back safely to deterministic campus search.`;
       }
     }
+
+    const defaultNote =
+      llmFallbackNote ||
+      "Deterministic campus search assistant active (GEMINI_API_KEY not configured). To enable optional live AI responses, configure GEMINI_API_KEY with a model available on your Google AI Studio free tier. Billing is never required.";
 
     // 7. Deterministic Retrieval Fallback
     if (matched.length > 0) {
@@ -236,7 +241,7 @@ export class ChatService {
         communityId: commId,
         communityName: commName,
         configuredModel: false,
-        note: "Deterministic campus search assistant active (Optional AI model not configured). To enable optional LLM generation, set GEMINI_API_KEY or OPENAI_API_KEY in the API environment.",
+        note: defaultNote,
       };
     }
 
@@ -252,7 +257,7 @@ export class ChatService {
       communityId: commId,
       communityName: commName,
       configuredModel: false,
-      note: "Deterministic campus search assistant active (Optional AI model not configured). To enable optional LLM generation, set GEMINI_API_KEY or OPENAI_API_KEY in the API environment.",
+      note: defaultNote,
     };
   }
 
@@ -260,11 +265,13 @@ export class ChatService {
     userMessage: string,
     publicReports: PublicReportItem[],
     communityName: string
-  ): Promise<string | null> {
-    // Only invoke if key is available
+  ): Promise<{ reply: string | null; provider: string; model: string; errorReason?: string }> {
     const geminiKey = process.env.GEMINI_API_KEY;
-    if (!geminiKey) return null;
+    if (!geminiKey || geminiKey.includes("replace-")) {
+      return { reply: null, provider: "none", model: "none" };
+    }
 
+    // PRIVACY BOUNDARY: Strictly public report metadata only
     const publicContext = publicReports.slice(0, 10).map((r) => ({
       type: r.reportType,
       title: r.title,
@@ -284,27 +291,69 @@ export class ChatService {
       `4. Never ask for or expose private clues, passwords, or personal credentials.\n` +
       `Context Reports: ${JSON.stringify(publicContext)}`;
 
-    const model = process.env.GEMINI_MODEL || "gemini-1.5-flash";
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`;
-    const payload = {
-      contents: [
-        { role: "user", parts: [{ text: `${systemPrompt}\n\nUser Question: ${userMessage}` }] },
-      ],
-      generationConfig: { maxOutputTokens: 300, temperature: 0.2 },
-    };
+    const requestedModel = (process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
 
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    if (!res.ok) {
-      throw new Error(`Gemini API error status ${res.status}`);
+    // Models to attempt: primary configured model, with fallback candidate if 404 (model unavailable/retired)
+    const modelsToTry = [requestedModel];
+    if (requestedModel !== "gemini-2.5-flash-lite") {
+      modelsToTry.push("gemini-2.5-flash-lite");
     }
 
-    const data: any = await res.json();
-    return data?.candidates?.[0]?.content?.parts?.[0]?.text || null;
+    let lastError: string = "Unknown error";
+
+    for (const model of modelsToTry) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(geminiKey)}`;
+        const payload = {
+          contents: [
+            { role: "user", parts: [{ text: `${systemPrompt}\n\nUser Question: ${userMessage}` }] },
+          ],
+          generationConfig: { maxOutputTokens: 300, temperature: 0.2 },
+        };
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
+
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+
+        if (res.status === 404) {
+          lastError = `Model '${model}' was not found or has been retired for this API key project (HTTP 404).`;
+          continue; // Try secondary fallback model if available
+        }
+
+        if (res.status === 429) {
+          lastError = `Gemini API free-tier quota limit reached (HTTP 429).`;
+          break; // Project-level quota; do not retry
+        }
+
+        if (res.status === 401 || res.status === 403) {
+          lastError = `Gemini API authentication failed (HTTP ${res.status}). Verify GEMINI_API_KEY.`;
+          break;
+        }
+
+        if (!res.ok) {
+          lastError = `Gemini API returned HTTP status ${res.status}.`;
+          break;
+        }
+
+        const data: any = await res.json();
+        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text && typeof text === "string" && text.trim().length > 0) {
+          return { reply: text.trim(), provider: "gemini", model };
+        }
+      } catch (err: any) {
+        lastError = err.name === "AbortError" ? "Gemini API request timed out (8s limit)" : err.message;
+        break;
+      }
+    }
+
+    return { reply: null, provider: "gemini", model: requestedModel, errorReason: lastError };
   }
 }
 

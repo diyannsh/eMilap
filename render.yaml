@@ -71,3 +71,7 @@ services:
       # Optional Generative AI: if omitted, deterministic campus keyword retrieval is used
       - key: GEMINI_API_KEY
         sync: false
+
+      # Google AI Studio model (defaults to active free-tier Flash model)
+      - key: GEMINI_MODEL
+        value: "gemini-2.5-flash"

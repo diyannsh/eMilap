@@ -82,6 +82,10 @@ export function validateEnvironment(): EnvValidationResult {
     warnings.push(
       "Optional AI provider (GEMINI_API_KEY or OPENAI_API_KEY) is not configured. The chatbot and matching services run in deterministic fallback mode."
     );
+  } else if (hasGemini && process.env.GEMINI_MODEL && (process.env.GEMINI_MODEL.includes("1.5") || process.env.GEMINI_MODEL.includes("2.0"))) {
+    warnings.push(
+      `GEMINI_MODEL='${process.env.GEMINI_MODEL}' references a deprecated/retired model family. Please configure an active free-tier model such as 'gemini-2.5-flash'.`
+    );
   }
 
   return {
