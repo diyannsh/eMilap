@@ -1,86 +1,157 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import FloatingPanel from '../ui/FloatingPanel.jsx';
-
-const preferences = [
-  ['matchUpdates', 'Possible match updates', 'Let me know when a report may match one of mine.'],
-  ['claimUpdates', 'Ownership claim updates', 'Show updates when a claim needs review.'],
-];
+import { Building2, Check, LogOut, ShieldCheck, User, Bell } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { api } from '../../lib/api.js';
 
 export default function AccountSettingsView() {
-  const [enabled, setEnabled] = useState({ matchUpdates: true, claimUpdates: true });
+  const { user, logout, refresh } = useAuth();
+  const [communities, setCommunities] = useState([]);
+  const [selectedCommunity, setSelectedCommunity] = useState('');
   const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState({
+    matchUpdates: true,
+    claimUpdates: true,
+  });
+
+  useEffect(() => {
+    let mounted = true;
+    api.communities.list()
+      .then((res) => {
+        if (mounted && res?.data) {
+          setCommunities(res.data);
+          if (user?.communityId) {
+            setSelectedCommunity(user.communityId);
+          } else if (res.data.length > 0) {
+            setSelectedCommunity(res.data[0].id);
+          }
+        }
+      })
+      .catch(() => {});
+    return () => { mounted = false; };
+  }, [user]);
+
+  const handleJoinCommunity = async (e) => {
+    e.preventDefault();
+    if (!selectedCommunity) return;
+    setLoading(true);
+    setMessage('');
+    try {
+      await api.communities.join(selectedCommunity);
+      await refresh();
+      setMessage('Active campus community updated successfully.');
+      setTimeout(() => setMessage(''), 3000);
+    } catch (err) {
+      setMessage(`Failed to update community: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!user) {
+    return (
+      <div className="w-full max-w-2xl mx-auto">
+        <FloatingPanel title="Account Settings">
+          <div className="py-12 text-center text-[#E5E4E2]/70 space-y-3">
+            <User size={36} className="mx-auto text-[#E6E0F0]" />
+            <p className="font-semibold text-lg text-[#FAF9F8]">Sign-in Required</p>
+            <p className="text-xs text-[#E5E4E2]/60 max-w-md mx-auto">
+              Please sign in using the top-right menu to view your profile details, manage memberships, and review notifications.
+            </p>
+          </div>
+        </FloatingPanel>
+      </div>
+    );
+  }
 
   return (
-    <div className="mx-auto grid w-full max-w-5xl gap-6 md:grid-cols-2">
+    <div className="mx-auto grid w-full max-w-5xl gap-5 md:grid-cols-2">
+      {/* Profile Details Panel */}
       <FloatingPanel title="Profile Details">
-        <form
-          className="grid gap-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setMessage('Profile settings saved locally.');
-          }}
-        >
-          <label className="grid gap-2 text-sm font-medium text-[#E5E4E2]">
-            Full Name
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs uppercase font-semibold text-[#E5E4E2]/60 mb-1">Display Name</label>
             <input
-              className="rounded-xl border border-[#6F4E37]/50 bg-[#140C08]/80 px-4 py-3 text-[#FAF9F8] placeholder-[#E5E4E2]/40 outline-none transition focus:border-[#E6E0F0] focus:ring-1 focus:ring-[#E6E0F0]/40"
-              name="name"
-              placeholder="Your full name"
-              autoComplete="name"
+              disabled
+              value={user.displayName || ''}
+              className="w-full rounded-xl border border-[#6F4E37]/50 bg-[#140C08]/80 px-4 py-2.5 text-xs text-[#FAF9F8] outline-none"
             />
-          </label>
-          <label className="grid gap-2 text-sm font-medium text-[#E5E4E2]">
-            Campus Email
-            <input
-              className="rounded-xl border border-[#6F4E37]/50 bg-[#140C08]/80 px-4 py-3 text-[#FAF9F8] placeholder-[#E5E4E2]/40 outline-none transition focus:border-[#E6E0F0] focus:ring-1 focus:ring-[#E6E0F0]/40"
-              name="email"
-              type="email"
-              placeholder="you@campus.edu"
-              autoComplete="email"
-            />
-          </label>
-          <p className="text-xs leading-relaxed text-[#E5E4E2]/70">
-            Profile details are used to verify ownership claims and deliver status notifications.
-          </p>
-          <button
-            className="w-full rounded-xl border border-[#E5E4E2]/20 bg-[#6F4E37] px-4 py-3.5 font-semibold text-[#FAF9F8] transition hover:bg-[#8C5E43] shadow-lg"
-            type="submit"
-          >
-            Save profile
-          </button>
-        </form>
-      </FloatingPanel>
+          </div>
 
-      <FloatingPanel title="Notification Preferences">
-        <div className="grid gap-4">
-          {preferences.map(([key, label, description]) => (
-            <label
-              key={key}
-              className="flex cursor-pointer items-start justify-between gap-4 rounded-xl border border-[#6F4E37]/45 bg-[#140C08]/75 p-4 transition hover:border-[#6F4E37]/75"
-            >
-              <span>
-                <span className="block font-semibold text-[#FAF9F8]">{label}</span>
-                <span className="mt-1 block text-sm leading-relaxed text-[#E5E4E2]/75">{description}</span>
+          <div>
+            <label className="block text-xs uppercase font-semibold text-[#E5E4E2]/60 mb-1">Campus Email</label>
+            <input
+              disabled
+              value={user.email || ''}
+              className="w-full rounded-xl border border-[#6F4E37]/50 bg-[#140C08]/80 px-4 py-2.5 text-xs text-[#FAF9F8] outline-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 pt-2">
+            <div className="p-3 bg-[#100805] rounded-xl border border-[#6F4E37]/40">
+              <span className="text-[10px] uppercase font-bold text-[#E5E4E2]/60 block">Account Role</span>
+              <span className="text-sm font-semibold text-[#C68B59] mt-0.5 flex items-center gap-1">
+                <ShieldCheck size={14} /> {user.role || 'MEMBER'}
               </span>
-              <input
-                type="checkbox"
-                className="mt-1 h-5 w-5 shrink-0 accent-[#6F4E37] cursor-pointer"
-                checked={enabled[key]}
-                onChange={(event) => {
-                  setEnabled((current) => ({ ...current, [key]: event.target.checked }));
-                  setMessage('Notification preference updated.');
-                }}
-              />
-            </label>
-          ))}
+            </div>
+            <div className="p-3 bg-[#100805] rounded-xl border border-[#6F4E37]/40">
+              <span className="text-[10px] uppercase font-bold text-[#E5E4E2]/60 block">Active Community</span>
+              <span className="text-sm font-semibold text-[#E6E0F0] mt-0.5 truncate block">
+                {user.communityName || 'Not selected'}
+              </span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={logout}
+            className="w-full mt-2 rounded-xl border border-red-500/40 bg-red-950/30 hover:bg-red-900/40 px-4 py-2.5 text-xs font-semibold text-red-300 transition flex items-center justify-center gap-1.5"
+          >
+            <LogOut size={14} /> Sign out of eMilap
+          </button>
         </div>
       </FloatingPanel>
 
-      {message && (
-        <p className="md:col-span-2 rounded-xl border border-[#6F4E37]/60 bg-[#1B110C]/90 px-5 py-3.5 text-sm text-[#E6E0F0]" role="status">
-          {message}
-        </p>
-      )}
+      {/* Community Membership Controls */}
+      <FloatingPanel title="Campus Community Membership">
+        <form onSubmit={handleJoinCommunity} className="space-y-4">
+          <p className="text-xs text-[#E5E4E2]/70 leading-relaxed">
+            Choose which campus community or hostel directory you belong to. Reports, matches, and notifications are scoped to your active community.
+          </p>
+
+          <div>
+            <label className="block text-xs uppercase font-semibold text-[#E5E4E2]/60 mb-1">
+              Select Campus Community
+            </label>
+            <select
+              value={selectedCommunity}
+              onChange={(e) => setSelectedCommunity(e.target.value)}
+              className="w-full rounded-xl border border-[#6F4E37]/50 bg-[#140C08] px-4 py-2.5 text-xs text-[#FAF9F8] outline-none focus:border-[#E6E0F0]"
+            >
+              {communities.map((c) => (
+                <option key={c.id} value={c.id} className="bg-[#140C08]">
+                  {c.name} ({c.slug})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading || selectedCommunity === user.communityId}
+            className="w-full rounded-xl bg-[#6F4E37] hover:bg-[#8C5E43] text-[#FAF9F8] py-2.5 px-4 font-bold text-xs transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 shadow"
+          >
+            <Check size={14} /> {selectedCommunity === user.communityId ? 'Current Active Community' : 'Switch Active Community'}
+          </button>
+
+          {message && (
+            <p className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-2.5 text-xs text-emerald-300">
+              {message}
+            </p>
+          )}
+        </form>
+      </FloatingPanel>
     </div>
   );
 }

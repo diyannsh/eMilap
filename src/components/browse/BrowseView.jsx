@@ -1,22 +1,34 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import FloatingPanel from '../ui/FloatingPanel.jsx';
-import { CAMPUS_ZONES, ITEM_CATEGORIES, useMockStore } from '../../data/mockStore.js';
+import { CAMPUS_ZONES, ITEM_CATEGORIES, mockStore, useMockStore } from '../../data/mockStore.js';
 import { copyShareLink, getRouteUrl } from '../../lib/routes.js';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { api } from '../../lib/api.js';
 import {
   ArrowRight,
+  Camera,
   Check,
+  Edit3,
   Filter,
+  Image as ImageIcon,
+  ImagePlus,
   Info,
+  Lock,
   MapPin,
   RotateCcw,
   Search,
   Share2,
   Tag,
+  Trash2,
   X,
 } from 'lucide-react';
 
 export default function BrowseView({ onNavigate, initialItemId }) {
-  const { items } = useMockStore();
+  const { user } = useAuth();
+  const { items: mockItems } = useMockStore();
+
+  const [backendReports, setBackendReports] = useState([]);
+  const [loadingBackend, setLoadingBackend] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'LOST' | 'FOUND'
@@ -26,346 +38,504 @@ export default function BrowseView({ onNavigate, initialItemId }) {
   const [showFiltersBar, setShowFiltersBar] = useState(false);
   const [copiedItemId, setCopiedItemId] = useState(null);
 
+  // Claim modal state
+  const [claimModalOpen, setClaimModalOpen] = useState(false);
+  const [claimMessage, setClaimMessage] = useState('');
+  const [claimEvidenceFile, setClaimEvidenceFile] = useState(null);
+  const [claimEvidencePreview, setClaimEvidencePreview] = useState('');
+  const [claimStatusMsg, setClaimStatusMsg] = useState('');
+  const [claimLoading, setClaimLoading] = useState(false);
+  const evidenceInputRef = useRef(null);
+
+  // Edit report modal state
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editCategory, setEditCategory] = useState('Electronics');
+  const [editColor, setEditColor] = useState('');
+  const [editBrand, setEditBrand] = useState('');
+  const [editLocation, setEditLocation] = useState('');
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState('');
+
+  // Fetch backend reports
+  const fetchBackendReports = async () => {
+    setLoadingBackend(true);
+    try {
+      const params = {};
+      if (statusFilter !== 'ALL') params.type = statusFilter;
+      if (categoryFilter !== 'All Categories') params.category = categoryFilter;
+      if (searchQuery.trim()) params.search = searchQuery.trim();
+      const res = await api.reports.list(params);
+      if (Array.isArray(res?.data)) {
+        setBackendReports(res.data);
+      }
+    } catch {
+      // Offline or unauthenticated; fall back gracefully to local store
+      setBackendReports([]);
+    } finally {
+      setLoadingBackend(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchBackendReports();
+  }, [statusFilter, categoryFilter]);
+
+  // Combined item list: Normalize backend reports + mockItems (avoid duplicates by ID)
+  const allItems = useMemo(() => {
+    const normalizedBackend = backendReports.map((r) => ({
+      id: r.id,
+      title: r.title,
+      description: r.publicDescription || r.description || '',
+      category: r.category || 'Other',
+      color: r.color || '',
+      brand: r.brand || '',
+      location: r.approximateLocation || 'Campus',
+      spot: '',
+      date: r.createdAt ? new Date(r.createdAt).toLocaleDateString() : 'Recent',
+      status: r.reportType || r.status || 'LOST',
+      contact: r.reporter ? `${r.reporter.displayName || r.reporter.email}` : 'Campus Lost & Found Desk',
+      isBackend: true,
+      rawBackend: r,
+    }));
+
+    const backendIds = new Set(normalizedBackend.map((b) => b.id));
+    const uniqueMocks = mockItems.filter((m) => !backendIds.has(m.id));
+
+    return [...normalizedBackend, ...uniqueMocks];
+  }, [backendReports, mockItems]);
+
   // Deep-link: automatically open item when initialItemId is provided in URL
   useEffect(() => {
-    if (initialItemId && items.length > 0) {
-      const match = items.find((i) => i.id === initialItemId);
+    if (initialItemId && allItems.length > 0) {
+      const match = allItems.find((i) => i.id === initialItemId);
       if (match) {
         setSelectedItem(match);
       }
     }
-  }, [initialItemId, items]);
+  }, [initialItemId, allItems]);
 
   const handleOpenItem = (item) => {
     setSelectedItem(item);
-    if (typeof window !== 'undefined') {
-      const url = getRouteUrl('browse', { itemId: item.id });
-      window.history.replaceState(null, '', url);
+    if (window.history.pushState) {
+      window.history.replaceState(null, '', getRouteUrl('browse', { itemId: item.id }));
     }
   };
 
   const handleCloseItem = () => {
     setSelectedItem(null);
-    if (typeof window !== 'undefined') {
-      const url = getRouteUrl('browse');
-      window.history.replaceState(null, '', url);
+    if (window.history.pushState) {
+      window.history.replaceState(null, '', getRouteUrl('browse'));
     }
   };
 
   const handleShare = async (e, item) => {
-    e?.stopPropagation();
+    e.stopPropagation();
     await copyShareLink('browse', { itemId: item.id });
     setCopiedItemId(item.id);
-    setTimeout(() => setCopiedItemId(null), 2200);
+    setTimeout(() => {
+      setCopiedItemId(null);
+    }, 2000);
   };
 
-  // Filter items reactively
-  const filteredItems = useMemo(() => {
-    return items.filter((item) => {
-      // Status filter
-      if (statusFilter !== 'ALL' && item.status !== statusFilter) {
-        return false;
-      }
-      // Category filter
-      if (categoryFilter !== 'All Categories' && item.category !== categoryFilter) {
-        return false;
-      }
-      // Zone filter
-      if (zoneFilter !== 'All Campus Locations' && item.location !== zoneFilter) {
-        return false;
-      }
-      // Search query filter
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase().trim();
-        const matchesTitle = item.title?.toLowerCase().includes(query);
-        const matchesDesc = item.description?.toLowerCase().includes(query);
-        const matchesColor = item.color?.toLowerCase().includes(query);
-        const matchesLocation = item.location?.toLowerCase().includes(query);
-        const matchesSpot = item.spot?.toLowerCase().includes(query);
-        const matchesCategory = item.category?.toLowerCase().includes(query);
-
-        if (!matchesTitle && !matchesDesc && !matchesColor && !matchesLocation && !matchesSpot && !matchesCategory) {
-          return false;
-        }
-      }
-      return true;
-    });
-  }, [items, statusFilter, categoryFilter, zoneFilter, searchQuery]);
-
-  const hasActiveFilters =
-    statusFilter !== 'ALL' ||
-    categoryFilter !== 'All Categories' ||
-    zoneFilter !== 'All Campus Locations' ||
-    searchQuery.trim() !== '';
-
-  const resetAllFilters = () => {
+  const handleResetFilters = () => {
     setSearchQuery('');
     setStatusFilter('ALL');
     setCategoryFilter('All Categories');
     setZoneFilter('All Campus Locations');
   };
 
-  const lostCount = items.filter((i) => i.status === 'LOST').length;
-  const foundCount = items.filter((i) => i.status === 'FOUND').length;
+  // Filter items locally based on current active query, category, zone, and status
+  const filteredItems = useMemo(() => {
+    return allItems.filter((item) => {
+      const query = searchQuery.toLowerCase().trim();
+      const matchesSearch =
+        !query ||
+        item.title?.toLowerCase().includes(query) ||
+        item.description?.toLowerCase().includes(query) ||
+        item.location?.toLowerCase().includes(query) ||
+        item.category?.toLowerCase().includes(query) ||
+        item.color?.toLowerCase().includes(query);
+
+      const matchesStatus =
+        statusFilter === 'ALL' || item.status?.toUpperCase() === statusFilter.toUpperCase();
+
+      const matchesCategory =
+        categoryFilter === 'All Categories' || item.category === categoryFilter;
+
+      const matchesZone =
+        zoneFilter === 'All Campus Locations' ||
+        item.location?.toLowerCase().includes(zoneFilter.toLowerCase());
+
+      return matchesSearch && matchesStatus && matchesCategory && matchesZone;
+    });
+  }, [allItems, searchQuery, statusFilter, categoryFilter, zoneFilter]);
+
+  const counts = useMemo(() => {
+    return {
+      all: allItems.length,
+      lost: allItems.filter((i) => i.status === 'LOST').length,
+      found: allItems.filter((i) => i.status === 'FOUND').length,
+    };
+  }, [allItems]);
+
+  // Evidence handler
+  const handleSelectEvidence = (file) => {
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Photo evidence must be under 5MB');
+      return;
+    }
+    setClaimEvidenceFile(file);
+    setClaimEvidencePreview(URL.createObjectURL(file));
+  };
+
+  const clearEvidence = () => {
+    setClaimEvidenceFile(null);
+    if (claimEvidencePreview) URL.revokeObjectURL(claimEvidencePreview);
+    setClaimEvidencePreview('');
+    if (evidenceInputRef.current) evidenceInputRef.current.value = '';
+  };
+
+  // Submit claim
+  const handleSubmitClaim = async (e) => {
+    e.preventDefault();
+    if (!claimMessage.trim() || !selectedItem) return;
+    setClaimLoading(true);
+    setClaimStatusMsg('');
+
+    try {
+      let evidenceObjectKey = undefined;
+      if (claimEvidenceFile) {
+        try {
+          const uploadRes = await api.uploads.uploadClaimEvidence(claimEvidenceFile);
+          evidenceObjectKey = uploadRes?.data?.objectKey;
+        } catch (uploadErr) {
+          console.warn('Evidence upload failed:', uploadErr);
+        }
+      }
+
+      if (selectedItem.isBackend && user) {
+        await api.claims.create({
+          reportId: selectedItem.id,
+          message: claimMessage.trim(),
+          evidenceObjectKey,
+        });
+      } else {
+        // Fallback local claim
+        mockStore.claims.push({
+          id: `CLM-${Date.now()}`,
+          reportId: selectedItem.id,
+          itemTitle: selectedItem.title,
+          category: selectedItem.category,
+          location: selectedItem.location,
+          status: 'PENDING',
+          message: claimMessage.trim(),
+          createdAt: new Date().toISOString(),
+        });
+      }
+
+      setClaimStatusMsg('Claim submitted! Campus staff will review your ownership details.');
+      setTimeout(() => {
+        setClaimModalOpen(false);
+        setClaimStatusMsg('');
+        clearEvidence();
+      }, 1800);
+    } catch (err) {
+      setClaimStatusMsg(err.message || 'Failed to submit claim. Please try again.');
+    } finally {
+      setClaimLoading(false);
+    }
+  };
+
+  // Edit Report Handlers
+  const openEditModal = (item) => {
+    setEditTitle(item.title || '');
+    setEditDescription(item.description || '');
+    setEditCategory(item.category || 'Electronics');
+    setEditColor(item.color || '');
+    setEditBrand(item.brand || '');
+    setEditLocation(item.location || '');
+    setEditError('');
+    setEditModalOpen(true);
+  };
+
+  const handleSaveEdit = async (e) => {
+    e.preventDefault();
+    if (!selectedItem) return;
+    setEditLoading(true);
+    setEditError('');
+    try {
+      if (selectedItem.isBackend) {
+        const updated = await api.reports.update(selectedItem.id, {
+          title: editTitle.trim(),
+          publicDescription: editDescription.trim(),
+          category: editCategory,
+          color: editColor.trim() || undefined,
+          brand: editBrand.trim() || undefined,
+          approximateLocation: editLocation.trim() || undefined,
+        });
+        setSelectedItem((curr) => (curr ? { ...curr, ...updated.data } : null));
+        fetchBackendReports();
+      } else {
+        mockStore.updateItem(selectedItem.id, {
+          title: editTitle.trim(),
+          description: editDescription.trim(),
+          category: editCategory,
+          color: editColor.trim(),
+          location: editLocation.trim(),
+        });
+        setSelectedItem((curr) =>
+          curr
+            ? {
+                ...curr,
+                title: editTitle.trim(),
+                description: editDescription.trim(),
+                category: editCategory,
+                color: editColor.trim(),
+                location: editLocation.trim(),
+              }
+            : null
+        );
+      }
+      setEditModalOpen(false);
+    } catch (err) {
+      setEditError(err.message || 'Failed to save changes');
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const handleCloseReport = async (itemId) => {
+    if (!window.confirm('Are you sure you want to mark this item as resolved/closed?')) return;
+    try {
+      if (selectedItem?.isBackend) {
+        await api.reports.close(itemId);
+        fetchBackendReports();
+      }
+      setSelectedItem(null);
+    } catch (err) {
+      alert(err.message || 'Failed to close report');
+    }
+  };
 
   return (
-    <div className="w-full max-w-5xl mx-auto flex flex-col gap-6">
-      {/* ── Search & Filter Controls Bar ── */}
-      <div className="flex flex-col gap-3">
-        <div className="flex gap-3">
-          <div className="flex-1 bg-[#1A100C]/90 backdrop-blur-xl rounded-xl p-2.5 border border-[#6F4E37]/60 flex items-center px-4 focus-within:border-[#E6E0F0] shadow-xl transition-all">
-            <Search className="text-[#E6E0F0]/80 mr-3 shrink-0" size={19} />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              aria-label="Search listings"
-              placeholder="Search by keyword, item, color, or location..."
-              className="bg-transparent border-none outline-none text-[#FAF9F8] placeholder-[#E5E4E2]/40 w-full text-sm md:text-base"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="text-[#E5E4E2]/60 hover:text-[#FAF9F8] p-1 ml-2 transition"
-                aria-label="Clear search text"
-              >
-                <X size={16} />
-              </button>
-            )}
+    <div className="mx-auto flex w-full max-w-6xl flex-col space-y-6">
+      <FloatingPanel title="Campus Lost &amp; Found Directory">
+        {/* ── Top Controls: Search & Tabs ── */}
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            {/* Search Input Bar */}
+            <div className="relative flex-1">
+              <Search
+                size={16}
+                className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#E5E4E2]/50 pointer-events-none"
+              />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search lost or found items by name, color, brand, or spot..."
+                className="w-full pl-10 pr-9 py-2.5 rounded-xl border border-[#6F4E37]/50 bg-[#160D0A]/70 text-sm text-[#FAF9F8] placeholder-[#E5E4E2]/40 transition focus:border-[#E6E0F0] focus:outline-none focus:ring-1 focus:ring-[#E6E0F0]/40"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#E5E4E2]/50 hover:text-[#FAF9F8]"
+                >
+                  <X size={15} />
+                </button>
+              )}
+            </div>
+
+            {/* Filter Toggle Button */}
+            <button
+              type="button"
+              onClick={() => setShowFiltersBar((prev) => !prev)}
+              className={`px-3.5 py-2.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 transition ${
+                showFiltersBar || categoryFilter !== 'All Categories' || zoneFilter !== 'All Campus Locations'
+                  ? 'bg-[#6F4E37] text-[#FAF9F8] border-[#E6E0F0]/30 shadow-md'
+                  : 'bg-[#180E0A] text-[#E5E4E2] border-[#6F4E37]/50 hover:bg-[#25150F]'
+              }`}
+            >
+              <Filter size={14} />
+              <span>Filters</span>
+              {(categoryFilter !== 'All Categories' || zoneFilter !== 'All Campus Locations') && (
+                <span className="w-2 h-2 rounded-full bg-emerald-400" />
+              )}
+            </button>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setShowFiltersBar((prev) => !prev)}
-            className={`px-4 md:px-5 flex items-center gap-2 rounded-xl text-sm font-medium transition shadow-xl border ${
-              showFiltersBar || hasActiveFilters
-                ? 'bg-[#6F4E37] text-[#FAF9F8] border-[#E6E0F0]/50'
-                : 'bg-[#241611] text-[#E5E4E2] border-[#6F4E37]/60 hover:bg-[#341F17]'
-            }`}
-          >
-            <Filter size={16} />
-            <span className="hidden sm:inline">Filters</span>
-            {hasActiveFilters && (
-              <span className="w-2 h-2 rounded-full bg-[#E6E0F0]" />
-            )}
-          </button>
-        </div>
-
-        {/* ── Status Pills & Quick Filter Controls ── */}
-        <div className="flex flex-wrap items-center justify-between gap-3 bg-[#140C08]/80 border border-[#6F4E37]/45 p-3 rounded-xl backdrop-blur-md">
-          {/* Status Tabs */}
-          <div className="flex items-center gap-1.5 bg-[#0E0805]/70 p-1 rounded-lg border border-[#6F4E37]/35">
+          {/* Status Tabs: All, Lost, Found */}
+          <div className="flex items-center gap-2 border-b border-[#6F4E37]/30 pb-2 overflow-x-auto">
             <button
               type="button"
               onClick={() => setStatusFilter('ALL')}
-              className={`px-3 py-1.5 rounded-md text-xs font-semibold tracking-wide transition ${
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 ${
                 statusFilter === 'ALL'
                   ? 'bg-[#6F4E37] text-[#FAF9F8] shadow'
-                  : 'text-[#E5E4E2]/70 hover:text-[#FAF9F8]'
+                  : 'text-[#E5E4E2]/70 hover:text-[#FAF9F8] hover:bg-[#1C100B]'
               }`}
             >
-              All ({items.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter('FOUND')}
-              className={`px-3 py-1.5 rounded-md text-xs font-semibold tracking-wide transition ${
-                statusFilter === 'FOUND'
-                  ? 'bg-[#C68B59] text-[#160D0A] shadow'
-                  : 'text-[#E5E4E2]/70 hover:text-[#FAF9F8]'
-              }`}
-            >
-              Found ({foundCount})
+              All Items ({counts.all})
             </button>
             <button
               type="button"
               onClick={() => setStatusFilter('LOST')}
-              className={`px-3 py-1.5 rounded-md text-xs font-semibold tracking-wide transition ${
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 flex items-center gap-1.5 ${
                 statusFilter === 'LOST'
-                  ? 'bg-[#8C5E43] text-[#FAF9F8] shadow'
-                  : 'text-[#E5E4E2]/70 hover:text-[#FAF9F8]'
+                  ? 'bg-[#6F4E37] text-[#FAF9F8] shadow'
+                  : 'text-[#E5E4E2]/70 hover:text-[#FAF9F8] hover:bg-[#1C100B]'
               }`}
             >
-              Lost ({lostCount})
+              <span className="w-2 h-2 rounded-full bg-amber-500/80" />
+              Lost ({counts.lost})
             </button>
-          </div>
-
-          {/* Location Dropdown */}
-          <div className="flex items-center gap-2">
-            <MapPin size={15} className="text-[#C68B59] hidden sm:inline" />
-            <select
-              value={zoneFilter}
-              onChange={(e) => setZoneFilter(e.target.value)}
-              aria-label="Filter by campus location"
-              className="bg-[#1C120D] text-[#E5E4E2] text-xs font-medium border border-[#6F4E37]/60 rounded-lg px-3 py-2 outline-none focus:border-[#E6E0F0] cursor-pointer"
-            >
-              {CAMPUS_ZONES.map((zone) => (
-                <option key={zone} value={zone}>
-                  {zone}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* ── Expandable Category Filter Strip ── */}
-        {(showFiltersBar || categoryFilter !== 'All Categories') && (
-          <div className="p-3 bg-[#180E0A]/90 border border-[#6F4E37]/50 rounded-xl space-y-2 animate-fadeIn">
-            <div className="flex items-center justify-between text-xs text-[#E6E0F0]/80 px-1 font-semibold uppercase tracking-wider">
-              <span className="flex items-center gap-1.5">
-                <Tag size={13} /> Filter by Category
-              </span>
-              {categoryFilter !== 'All Categories' && (
-                <button
-                  type="button"
-                  onClick={() => setCategoryFilter('All Categories')}
-                  className="text-xs text-[#C68B59] hover:underline"
-                >
-                  Clear Category
-                </button>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {ITEM_CATEGORIES.map((cat) => (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => setCategoryFilter(cat)}
-                  className={`text-xs px-3 py-1.5 rounded-lg border transition ${
-                    categoryFilter === cat
-                      ? 'bg-[#E6E0F0] text-[#160D0A] font-bold border-[#E6E0F0]'
-                      : 'bg-[#100805] text-[#E5E4E2]/80 border-[#6F4E37]/40 hover:border-[#E6E0F0]/50 hover:text-[#FAF9F8]'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ── Active Filter Badges Strip ── */}
-        {hasActiveFilters && (
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            <span className="text-xs text-[#E5E4E2]/60">Active filters:</span>
-            {statusFilter !== 'ALL' && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs bg-[#2E1C15] text-[#E5E4E2] border border-[#6F4E37]/60">
-                Status: {statusFilter}
-                <button type="button" onClick={() => setStatusFilter('ALL')} className="hover:text-red-400">
-                  <X size={12} />
-                </button>
-              </span>
-            )}
-            {categoryFilter !== 'All Categories' && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs bg-[#2E1C15] text-[#E5E4E2] border border-[#6F4E37]/60">
-                {categoryFilter}
-                <button type="button" onClick={() => setCategoryFilter('All Categories')} className="hover:text-red-400">
-                  <X size={12} />
-                </button>
-              </span>
-            )}
-            {zoneFilter !== 'All Campus Locations' && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs bg-[#2E1C15] text-[#E5E4E2] border border-[#6F4E37]/60">
-                {zoneFilter}
-                <button type="button" onClick={() => setZoneFilter('All Campus Locations')} className="hover:text-red-400">
-                  <X size={12} />
-                </button>
-              </span>
-            )}
-            {searchQuery.trim() !== '' && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs bg-[#2E1C15] text-[#E5E4E2] border border-[#6F4E37]/60">
-                &ldquo;{searchQuery}&rdquo;
-                <button type="button" onClick={() => setSearchQuery('')} className="hover:text-red-400">
-                  <X size={12} />
-                </button>
-              </span>
-            )}
             <button
               type="button"
-              onClick={resetAllFilters}
-              className="inline-flex items-center gap-1 text-xs text-[#C68B59] hover:text-[#E0AA6F] hover:underline ml-1"
+              onClick={() => setStatusFilter('FOUND')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition shrink-0 flex items-center gap-1.5 ${
+                statusFilter === 'FOUND'
+                  ? 'bg-[#C68B59] text-[#160D0A] shadow font-bold'
+                  : 'text-[#E5E4E2]/70 hover:text-[#FAF9F8] hover:bg-[#1C100B]'
+              }`}
             >
-              <RotateCcw size={12} /> Reset all
+              <span className="w-2 h-2 rounded-full bg-emerald-400" />
+              Found ({counts.found})
             </button>
           </div>
-        )}
-      </div>
 
-      {/* ── Listings Grid ── */}
-      <FloatingPanel
-        title={`Campus Listings (${filteredItems.length} ${filteredItems.length === 1 ? 'item' : 'items'})`}
-      >
-        <p className="mb-5 text-sm text-[#E5E4E2]/75">
-          Real-time reports from campus desks, lecture halls, and student submissions. Click any card for details or to share.
-        </p>
+          {/* ── Collapsible Filters Bar: Categories & Zones ── */}
+          {showFiltersBar && (
+            <div className="p-4 rounded-xl bg-[#140C08]/80 border border-[#6F4E37]/50 space-y-3.5 animate-fadeIn">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                {/* Campus Zone Select */}
+                <div>
+                  <label className="block mb-1 font-semibold text-[#E6E0F0] flex items-center gap-1.5">
+                    <MapPin size={13} className="text-[#C68B59]" /> Campus Zone
+                  </label>
+                  <select
+                    value={zoneFilter}
+                    onChange={(e) => setZoneFilter(e.target.value)}
+                    className="w-full p-2.5 rounded-lg border border-[#6F4E37]/50 bg-[#1D110C] text-[#FAF9F8] focus:border-[#E6E0F0] focus:outline-none"
+                  >
+                    {CAMPUS_ZONES.map((zone) => (
+                      <option key={zone} value={zone}>
+                        {zone}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-        {filteredItems.length === 0 ? (
-          <div className="p-8 sm:p-12 text-center rounded-xl bg-[#140C08]/80 border border-[#6F4E37]/45 flex flex-col items-center justify-center gap-3">
-            <Info size={36} className="text-[#C68B59] opacity-80" />
-            <h4 className="text-lg font-semibold text-[#FAF9F8]">No matching listings found</h4>
-            <p className="text-sm text-[#E5E4E2]/70 max-w-md">
-              We couldn&apos;t find any lost or found items matching your current filters. Try searching with fewer keywords or clearing filters.
-            </p>
-            <div className="flex flex-wrap gap-3 mt-2">
-              <button
-                type="button"
-                onClick={resetAllFilters}
-                className="px-4 py-2 bg-[#6F4E37] hover:bg-[#8C5E43] text-[#FAF9F8] rounded-lg text-xs font-semibold transition"
-              >
-                Reset All Filters
-              </button>
-              {onNavigate && (
-                <button
-                  type="button"
-                  onClick={() => onNavigate('report_lost')}
-                  className="px-4 py-2 bg-[#231713] hover:bg-[#341F17] text-[#E5E4E2] border border-[#6F4E37]/60 rounded-lg text-xs font-medium transition"
-                >
-                  File a Lost Report
-                </button>
-              )}
+                {/* Reset Filters Shortcut */}
+                <div className="flex items-end justify-start md:justify-end">
+                  <button
+                    type="button"
+                    onClick={handleResetFilters}
+                    className="px-3 py-2 rounded-lg text-xs font-medium text-[#E5E4E2]/80 hover:text-[#FAF9F8] hover:bg-[#20130E] border border-transparent hover:border-[#6F4E37]/40 flex items-center gap-1.5 transition"
+                  >
+                    <RotateCcw size={13} /> Reset All Filters
+                  </button>
+                </div>
+              </div>
+
+              {/* Category Pills Bar */}
+              <div>
+                <label className="block mb-1.5 font-semibold text-[#E6E0F0] text-xs flex items-center gap-1.5">
+                  <Tag size={13} className="text-[#C68B59]" /> Item Categories
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {ITEM_CATEGORIES.map((cat) => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setCategoryFilter(cat)}
+                      className={`px-2.5 py-1 rounded-full text-xs transition ${
+                        categoryFilter === cat
+                          ? 'bg-[#C68B59] text-[#160D0A] font-bold shadow-sm'
+                          : 'bg-[#1D110C] text-[#E5E4E2]/80 hover:text-[#FAF9F8] border border-[#6F4E37]/40'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
+          )}
+        </div>
+
+        {/* ── Results Info Bar ── */}
+        <div className="mt-4 mb-2 flex items-center justify-between text-xs text-[#E5E4E2]/60 px-1">
+          <span>
+            Showing <strong className="text-[#FAF9F8]">{filteredItems.length}</strong> listings
+          </span>
+          {loadingBackend && <span className="text-[#C68B59]">Syncing campus registry...</span>}
+        </div>
+
+        {/* ── Item Grid / Cards ── */}
+        {filteredItems.length === 0 ? (
+          <div className="my-10 text-center p-8 rounded-2xl bg-[#140C08]/60 border border-[#6F4E37]/40 space-y-3">
+            <div className="w-12 h-12 mx-auto rounded-full bg-[#6F4E37]/20 border border-[#6F4E37]/40 flex items-center justify-center text-[#C68B59]">
+              <Search size={22} />
+            </div>
+            <h4 className="text-base font-semibold text-[#FAF9F8]">No listings found</h4>
+            <p className="text-xs text-[#E5E4E2]/70 max-w-sm mx-auto">
+              We couldn&apos;t find any lost or found items matching your search criteria. Try loosening your filters or search keywords.
+            </p>
+            <button
+              type="button"
+              onClick={handleResetFilters}
+              className="mt-2 px-4 py-2 bg-[#6F4E37] hover:bg-[#8C5E43] text-[#FAF9F8] text-xs font-semibold rounded-lg transition"
+            >
+              Clear All Filters
+            </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-2">
             {filteredItems.map((item) => {
               const isFound = item.status === 'FOUND';
-              const isCopied = copiedItemId === item.id;
               return (
                 <article
                   key={item.id}
                   onClick={() => handleOpenItem(item)}
-                  className="p-5 rounded-xl bg-[#140C08]/80 border border-[#6F4E37]/50 hover:border-[#E6E0F0]/60 flex flex-col gap-3 transition-all duration-200 shadow-lg cursor-pointer hover:shadow-2xl hover:-translate-y-0.5 group"
+                  className="group cursor-pointer rounded-xl bg-[#160D0A]/75 hover:bg-[#1D110C] border border-[#6F4E37]/45 hover:border-[#6F4E37] p-4 transition-all duration-200 flex flex-col justify-between gap-3 shadow-sm hover:shadow-md relative overflow-hidden"
                 >
-                  {/* Status, Category & Share Button */}
-                  <div className="flex justify-between items-center gap-2">
+                  {/* Subtle top indicator bar */}
+                  <div
+                    className={`absolute top-0 left-0 right-0 h-1 ${
+                      isFound ? 'bg-[#C68B59]' : 'bg-[#6F4E37]'
+                    }`}
+                  />
+
+                  {/* Header: Status badge, ID, Share link button */}
+                  <div className="flex items-center justify-between gap-2 pt-1">
                     <span
-                      className={`text-[11px] px-2.5 py-1 rounded font-semibold tracking-wider ${
+                      className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded ${
                         isFound
                           ? 'bg-[#C68B59]/20 text-[#C68B59] border border-[#C68B59]/40'
-                          : 'bg-[#6F4E37]/35 text-[#E6E0F0] border border-[#6F4E37]/60'
+                          : 'bg-[#6F4E37]/35 text-[#E6E0F0] border border-[#6F4E37]/50'
                       }`}
                     >
-                      {item.status} {item.isSample ? '· SAMPLE' : '· LIVE'}
+                      {item.status}
                     </span>
 
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] text-[#E5E4E2]/50 font-mono">
+                        {item.date}
+                      </span>
                       <button
                         type="button"
                         onClick={(e) => handleShare(e, item)}
-                        className={`p-1.5 rounded-lg border transition ${
-                          isCopied
-                            ? 'bg-emerald-950/60 text-emerald-300 border-emerald-500/50'
-                            : 'text-[#E5E4E2]/50 hover:text-[#FAF9F8] border-transparent hover:border-[#6F4E37]/60 hover:bg-[#231713]'
+                        title="Copy direct share link to item"
+                        className={`p-1 rounded hover:bg-[#281610] text-[#E5E4E2]/60 hover:text-[#FAF9F8] transition ${
+                          copiedItemId === item.id ? 'text-emerald-400' : ''
                         }`}
-                        title="Copy direct link to this listing"
-                        aria-label={`Copy link for ${item.title}`}
                       >
-                        {isCopied ? <Check size={13} /> : <Share2 size={13} />}
+                        {copiedItemId === item.id ? <Check size={13} /> : <Share2 size={13} />}
                       </button>
-                      <span className="text-[11px] text-[#E5E4E2]/60 font-medium">
-                        {item.date || 'Recent'}
-                      </span>
                     </div>
                   </div>
 
@@ -422,7 +592,9 @@ export default function BrowseView({ onNavigate, initialItemId }) {
                 >
                   {selectedItem.status} ITEM
                 </span>
-                <span className="text-xs text-[#E5E4E2]/60">ID: {selectedItem.id}</span>
+                <span className="text-xs text-[#E5E4E2]/60 font-mono">
+                  ID: #{String(selectedItem.id).slice(-6)}
+                </span>
               </div>
 
               <div className="flex items-center gap-2">
@@ -460,6 +632,16 @@ export default function BrowseView({ onNavigate, initialItemId }) {
 
             <h3 className="text-xl font-bold text-[#FAF9F8]">{selectedItem.title}</h3>
 
+            {selectedItem.rawBackend?.images?.[0]?.objectKey && (
+              <div className="w-full h-48 rounded-xl overflow-hidden bg-[#120906] border border-[#6F4E37]/40">
+                <img
+                  src={`/api/v1/uploads/reports/${selectedItem.rawBackend.images[0].objectKey}`}
+                  alt={selectedItem.title}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3 text-xs">
               <div className="bg-[#120906] p-3 rounded-lg border border-[#6F4E37]/35">
                 <span className="text-[#E5E4E2]/60 block mb-0.5">Category</span>
@@ -470,7 +652,7 @@ export default function BrowseView({ onNavigate, initialItemId }) {
                 <span className="text-[#FAF9F8] font-semibold">{selectedItem.color || 'Not specified'}</span>
               </div>
               <div className="bg-[#120906] p-3 rounded-lg border border-[#6F4E37]/35 col-span-2">
-                <span className="text-[#E5E4E2]/60 block mb-0.5">Campus Location & Spot</span>
+                <span className="text-[#E5E4E2]/60 block mb-0.5">Campus Location &amp; Spot</span>
                 <span className="text-[#FAF9F8] font-semibold flex items-center gap-1 mt-0.5">
                   <MapPin size={13} className="text-[#C68B59]" /> {selectedItem.location}
                   {selectedItem.spot ? ` — ${selectedItem.spot}` : ''}
@@ -496,17 +678,34 @@ export default function BrowseView({ onNavigate, initialItemId }) {
               </p>
             </div>
 
+            {/* Moderator / Creator Action Buttons */}
+            {user && (user.id === selectedItem.rawBackend?.reporterId || user.role === 'MODERATOR' || user.role === 'ADMIN') && (
+              <div className="pt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => openEditModal(selectedItem)}
+                  className="px-3 py-1.5 rounded-lg border border-[#6F4E37]/60 text-[#E6E0F0] hover:bg-[#281610] text-xs font-semibold transition flex items-center gap-1.5"
+                >
+                  <Edit3 size={13} /> Edit Details
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleCloseReport(selectedItem.id)}
+                  className="px-3 py-1.5 rounded-lg border border-red-500/40 text-red-300 hover:bg-red-950/40 text-xs font-semibold transition"
+                >
+                  Close Listing
+                </button>
+              </div>
+            )}
+
             <div className="pt-2 flex flex-col sm:flex-row gap-2.5">
               {selectedItem.status === 'FOUND' ? (
                 <button
                   type="button"
-                  onClick={() => {
-                    handleCloseItem();
-                    onNavigate?.('claims');
-                  }}
+                  onClick={() => setClaimModalOpen(true)}
                   className="flex-1 py-3 bg-[#6F4E37] hover:bg-[#8C5E43] text-[#FAF9F8] rounded-xl font-semibold text-sm transition shadow-lg border border-[#E5E4E2]/20 flex items-center justify-center gap-1.5"
                 >
-                  Start Ownership Claim <ArrowRight size={15} />
+                  <Lock size={15} /> Start Ownership Claim
                 </button>
               ) : (
                 <button
@@ -528,6 +727,224 @@ export default function BrowseView({ onNavigate, initialItemId }) {
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Claim Submission Modal ── */}
+      {claimModalOpen && selectedItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="relative w-full max-w-md rounded-2xl border border-[#6F4E37] bg-[#1B110C] p-6 shadow-2xl">
+            <button
+              type="button"
+              onClick={() => {
+                setClaimModalOpen(false);
+                setClaimStatusMsg('');
+                clearEvidence();
+              }}
+              className="absolute top-4 right-4 p-2 text-[#E5E4E2]/60 hover:text-white"
+            >
+              <X size={18} />
+            </button>
+
+            <h3 className="text-lg font-bold text-[#FAF9F8] flex items-center gap-2">
+              <Lock size={18} className="text-[#C68B59]" /> Confirm Item Ownership
+            </h3>
+            <p className="text-xs text-[#E5E4E2]/70 mt-1">
+              Claiming: <strong className="text-[#FAF9F8]">{selectedItem.title}</strong>
+            </p>
+
+            <form onSubmit={handleSubmitClaim} className="mt-4 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-[#E5E4E2] mb-1">
+                  Private verification details *
+                </label>
+                <textarea
+                  value={claimMessage}
+                  onChange={(e) => setClaimMessage(e.target.value)}
+                  placeholder="Describe specific unique details only the true owner would know (e.g. serial numbers, stickers, specific contents, distinctive marks)..."
+                  required
+                  rows={4}
+                  className="w-full rounded-xl border border-[#6F4E37]/60 bg-[#120906] p-3 text-xs text-[#FAF9F8] outline-none focus:border-[#E6E0F0]"
+                />
+                <p className="text-[10px] text-[#E5E4E2]/50 mt-1">
+                  Never made public. Only visible to verified campus staff during review.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#E5E4E2] mb-1">
+                  Private Photographic Evidence (Optional)
+                </label>
+                {claimEvidencePreview ? (
+                  <div className="relative rounded-lg overflow-hidden border border-[#6F4E37]/50 bg-[#120906] h-28 max-w-xs">
+                    <img src={claimEvidencePreview} alt="Evidence preview" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={clearEvidence}
+                      className="absolute top-1.5 right-1.5 p-1 bg-black/70 rounded text-[#FAF9F8] hover:text-white"
+                      aria-label="Remove evidence"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => evidenceInputRef.current?.click()}
+                    className="w-full border border-dashed border-[#6F4E37]/60 rounded-xl p-3 text-center text-xs text-[#E5E4E2]/70 hover:border-[#E6E0F0] hover:text-[#FAF9F8] transition flex items-center justify-center gap-1.5"
+                  >
+                    <ImagePlus size={15} /> Attach evidence photo (receipt, serial, pre-loss photo)
+                  </button>
+                )}
+                <input
+                  ref={evidenceInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="sr-only"
+                  onChange={(e) => handleSelectEvidence(e.target.files?.[0])}
+                />
+                <p className="text-[10px] text-[#E5E4E2]/50 mt-1">
+                  JPEG, PNG, or WEBP up to 5MB. Stored securely and only viewable by authorized staff.
+                </p>
+              </div>
+
+              {claimStatusMsg && (
+                <p className="text-xs p-2.5 rounded-lg bg-[#6F4E37]/20 border border-[#6F4E37]/50 text-[#FAF9F8] font-medium">
+                  {claimStatusMsg}
+                </p>
+              )}
+
+              <div className="flex gap-2 justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setClaimModalOpen(false);
+                    clearEvidence();
+                  }}
+                  className="px-4 py-2 rounded-lg bg-[#241611] text-[#E5E4E2] text-xs hover:bg-[#341F18]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={claimLoading || !claimMessage.trim()}
+                  className="px-4 py-2 rounded-lg bg-[#6F4E37] hover:bg-[#8C5E43] text-[#FAF9F8] text-xs font-bold transition disabled:opacity-50"
+                >
+                  {claimLoading ? 'Submitting...' : 'Submit Claim'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit Report Modal ── */}
+      {editModalOpen && selectedItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="relative w-full max-w-lg rounded-2xl border border-[#6F4E37] bg-[#1B110C] p-6 shadow-2xl">
+            <button
+              type="button"
+              onClick={() => setEditModalOpen(false)}
+              className="absolute top-4 right-4 p-2 text-[#E5E4E2]/60 hover:text-white"
+            >
+              <X size={18} />
+            </button>
+
+            <h3 className="text-lg font-bold text-[#FAF9F8] flex items-center gap-2">
+              <Edit3 size={18} className="text-[#C68B59]" /> Edit Listing Details
+            </h3>
+
+            <form onSubmit={handleSaveEdit} className="mt-4 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-[#E5E4E2] mb-1">Item Title *</label>
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  required
+                  className="w-full rounded-xl border border-[#6F4E37]/60 bg-[#120906] p-2.5 text-xs text-[#FAF9F8] outline-none focus:border-[#E6E0F0]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#E5E4E2] mb-1">Visible Description *</label>
+                <textarea
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  required
+                  rows={3}
+                  className="w-full rounded-xl border border-[#6F4E37]/60 bg-[#120906] p-2.5 text-xs text-[#FAF9F8] outline-none focus:border-[#E6E0F0]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <label className="block text-[#E5E4E2] mb-1">Category</label>
+                  <select
+                    value={editCategory}
+                    onChange={(e) => setEditCategory(e.target.value)}
+                    className="w-full rounded-xl border border-[#6F4E37]/60 bg-[#120906] p-2.5 text-[#FAF9F8] outline-none"
+                  >
+                    {ITEM_CATEGORIES.filter((c) => c !== 'All Categories').map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[#E5E4E2] mb-1">Campus Location</label>
+                  <input
+                    type="text"
+                    value={editLocation}
+                    onChange={(e) => setEditLocation(e.target.value)}
+                    className="w-full rounded-xl border border-[#6F4E37]/60 bg-[#120906] p-2.5 text-[#FAF9F8] outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[#E5E4E2] mb-1">Color</label>
+                  <input
+                    type="text"
+                    value={editColor}
+                    onChange={(e) => setEditColor(e.target.value)}
+                    className="w-full rounded-xl border border-[#6F4E37]/60 bg-[#120906] p-2.5 text-[#FAF9F8] outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[#E5E4E2] mb-1">Brand</label>
+                  <input
+                    type="text"
+                    value={editBrand}
+                    onChange={(e) => setEditBrand(e.target.value)}
+                    className="w-full rounded-xl border border-[#6F4E37]/60 bg-[#120906] p-2.5 text-[#FAF9F8] outline-none"
+                  />
+                </div>
+              </div>
+
+              {editError && (
+                <p className="text-xs p-2.5 rounded-lg bg-red-950/40 border border-red-500/30 text-red-300">
+                  {editError}
+                </p>
+              )}
+
+              <div className="flex gap-2 justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditModalOpen(false)}
+                  className="px-4 py-2 rounded-lg bg-[#241611] text-[#E5E4E2] text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editLoading || !editTitle.trim()}
+                  className="px-4 py-2 rounded-lg bg-[#6F4E37] hover:bg-[#8C5E43] text-[#FAF9F8] text-xs font-bold transition disabled:opacity-50"
+                >
+                  {editLoading ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

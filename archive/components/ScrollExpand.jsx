@@ -1,4 +1,4 @@
-﻿
+
 import { useCallback, useEffect, useRef } from 'react';
 
 import './ScrollExpand.css';
@@ -237,5 +237,3 @@ const ScrollExpand = ({
 };
 
 export default ScrollExpand;
-
-

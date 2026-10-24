@@ -1,10 +1,12 @@
+import { useEffect, useState } from 'react';
 import FloatingPanel from '../ui/FloatingPanel.jsx';
-import { ArrowRight, CheckCircle, FileSearch, Sparkles, X } from 'lucide-react';
-import { useState } from 'react';
+import { ArrowRight, CheckCircle, FileSearch, Sparkles, ThumbsDown, X } from 'lucide-react';
+import { api } from '../../lib/api.js';
+import { useAuth } from '../../context/AuthContext.jsx';
 
-const INITIAL_MATCH_CARDS = [
+const SAMPLE_MATCH_CARDS = [
   {
-    id: 'match-1',
+    id: 'sample-match-1',
     confidence: '94% Match Score',
     foundItem: 'The North Face Surge Backpack',
     lostItem: 'Black backpack with red cord',
@@ -14,9 +16,10 @@ const INITIAL_MATCH_CARDS = [
     color: 'Black',
     notes: 'Found in cafeteria booth near west windows. Matches report description, front zip cord, and color.',
     badge: 'High Confidence',
+    isSample: true,
   },
   {
-    id: 'match-2',
+    id: 'sample-match-2',
     confidence: '88% Match Score',
     foundItem: 'Apple AirPods Pro (2nd Gen)',
     lostItem: 'AirPods Pro with engraved initials',
@@ -26,29 +29,94 @@ const INITIAL_MATCH_CARDS = [
     color: 'White',
     notes: 'Found beside desk 14 study cubicle. White case with minor hinge scratch.',
     badge: 'Likely Match',
+    isSample: true,
   },
 ];
 
 export default function MatchesView({ onNavigate }) {
-  const [matchList, setMatchList] = useState(INITIAL_MATCH_CARDS);
+  const { user } = useAuth();
+  const [matchList, setMatchList] = useState(SAMPLE_MATCH_CARDS);
+  const [loading, setLoading] = useState(false);
   const [dismissedId, setDismissedId] = useState(null);
+  const [actionMessage, setActionMessage] = useState('');
 
-  const handleDismiss = (id) => {
+  const fetchMatches = async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const res = await api.matches.list();
+      const backendMatches = res?.data || [];
+      if (backendMatches.length > 0) {
+        const mapped = backendMatches.map((m) => {
+          const repA = m.reportA || {};
+          const repB = m.reportB || {};
+          const scoreNum = Number(m.score || 0);
+          return {
+            id: m.id,
+            confidence: `${scoreNum.toFixed(0)}% Match Score`,
+            foundItem: repB.title || 'Found Campus Item',
+            lostItem: repA.title || 'Lost Campus Item',
+            location: repB.approximateLocation || repA.approximateLocation || 'Campus',
+            time: m.createdAt ? new Date(m.createdAt).toLocaleDateString() : 'Recent',
+            category: repB.category || repA.category || 'General',
+            color: repB.color || repA.color || 'Unspecified',
+            notes: repB.publicDescription || repA.publicDescription || 'Attributes matched by system algorithm.',
+            badge: scoreNum > 85 ? 'High Confidence' : 'Possible Match',
+            isBackend: true,
+            raw: m,
+          };
+        });
+        setMatchList(mapped);
+      }
+    } catch {
+      // Offline fallback: keep sample matches
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchMatches();
+  }, [user]);
+
+  const handleDismiss = async (id) => {
     setDismissedId(id);
+    const target = matchList.find((m) => m.id === id);
+
+    if (target?.isBackend) {
+      try {
+        await api.matches.dismiss(id, 'DISMISSED');
+      } catch (err) {
+        console.warn('Failed to dismiss backend match:', err);
+      }
+    }
+
     setTimeout(() => {
       setMatchList((prev) => prev.filter((m) => m.id !== id));
       setDismissedId(null);
+      setActionMessage('Match pair dismissed.');
+      setTimeout(() => setActionMessage(''), 2500);
     }, 250);
   };
 
   return (
     <div className="w-full max-w-4xl mx-auto flex flex-col gap-6">
+      {actionMessage && (
+        <div className="rounded-xl border border-[#6F4E37]/60 bg-[#1A0F0A] p-3 text-xs text-[#E6E0F0] animate-fadeIn">
+          {actionMessage}
+        </div>
+      )}
+
       <FloatingPanel title="Possible Matches">
         <p className="mb-5 text-sm text-[#E5E4E2]/75">
           Our intelligent campus matching algorithm pairs lost and found reports based on campus zone, category, item model, and descriptive attributes.
         </p>
 
-        {matchList.length === 0 ? (
+        {loading ? (
+          <div className="py-16 text-center text-[#E5E4E2]/60 text-sm">
+            Scanning for potential item matches...
+          </div>
+        ) : matchList.length === 0 ? (
           <div className="p-8 text-center rounded-xl bg-[#140C08]/80 border border-[#6F4E37]/40 flex flex-col items-center justify-center gap-3">
             <CheckCircle size={36} className="text-emerald-400" />
             <h4 className="text-base font-semibold text-[#FAF9F8]">No pending match pairs</h4>
@@ -87,7 +155,7 @@ export default function MatchesView({ onNavigate }) {
                   <div>
                     <h3 className="text-lg font-bold text-[#FAF9F8]">{match.foundItem}</h3>
                     <p className="text-xs text-[#E6E0F0] mt-0.5 font-medium">
-                      Paired with your lost report: &ldquo;{match.lostItem}&rdquo;
+                      Paired with report: &ldquo;{match.lostItem}&rdquo;
                     </p>
                   </div>
 

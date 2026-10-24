@@ -1,14 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import FloatingPanel from '../ui/FloatingPanel.jsx';
 import { useMockStore } from '../../data/mockStore.js';
 import { copyShareLink, getRouteUrl } from '../../lib/routes.js';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { api } from '../../lib/api.js';
 import {
+  AlertCircle,
   Check,
   CheckCircle,
   Clock,
   Eye,
   EyeOff,
+  FileText,
   Fingerprint,
+  Image as ImageIcon,
   Lock,
   Mail,
   MapPin,
@@ -21,21 +26,97 @@ import {
 } from 'lucide-react';
 
 export default function ClaimsView({ onNavigate, initialClaimId }) {
-  const { claims, updateClaimStatus } = useMockStore();
-  const [selectedClaimId, setSelectedClaimId] = useState(initialClaimId || claims[0]?.id || 'claim-1');
+  const { user } = useAuth();
+  const { claims: mockClaims, updateClaimStatus } = useMockStore();
+
+  const [backendClaims, setBackendClaims] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedClaimId, setSelectedClaimId] = useState(initialClaimId || '');
+  const [evidenceUrl, setEvidenceUrl] = useState('');
   const [unlockedClaims, setUnlockedClaims] = useState({});
   const [showStaffAuthModal, setShowStaffAuthModal] = useState(false);
   const [actionMessage, setActionMessage] = useState(null);
   const [copiedClaim, setCopiedClaim] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const isMod = user?.role === 'MODERATOR' || user?.role === 'ADMIN';
+
+  // Fetch backend claims if authenticated
+  const fetchBackendClaims = async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const res = await api.claims.list();
+      setBackendClaims(res?.data || []);
+    } catch {
+      setBackendClaims([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    if (initialClaimId && claims.some((c) => c.id === initialClaimId)) {
-      setSelectedClaimId(initialClaimId);
-    }
-  }, [initialClaimId, claims]);
+    fetchBackendClaims();
+  }, [user]);
 
-  const activeClaim = claims.find((c) => c.id === selectedClaimId) || claims[0];
+  // Combine backend claims + mockClaims
+  const allClaims = useMemo(() => {
+    const normalizedBackend = backendClaims.map((c) => ({
+      id: c.id,
+      itemTitle: c.report?.title || 'Reported Item',
+      claimantName: c.claimant?.displayName || c.claimant?.email || 'Campus Claimant',
+      claimantEmail: c.claimant?.email || 'claimant@campus.edu',
+      category: c.report?.category || 'General',
+      location: c.report?.approximateLocation || 'Campus',
+      claimDate: c.createdAt ? new Date(c.createdAt).toLocaleDateString() : 'Recent',
+      status:
+        c.status === 'APPROVED'
+          ? 'Approved'
+          : c.status === 'REJECTED'
+          ? 'Rejected'
+          : c.status === 'MORE_INFO_REQUESTED'
+          ? 'Under Review'
+          : 'Pending Verification',
+      rawStatus: c.status,
+      secretClueSubmitted: c.message || 'No description provided.',
+      holdingLocation: 'Admin Block, Rm 104',
+      systemMatchNote: `Automated match for report ${c.reportId}. Clue length: ${c.message?.length || 0} characters.`,
+      isBackend: true,
+      hasEvidence: Boolean(c.evidenceObjectKey),
+    }));
+
+    const backendIds = new Set(normalizedBackend.map((b) => b.id));
+    const uniqueMocks = mockClaims.filter((m) => !backendIds.has(m.id));
+
+    return [...normalizedBackend, ...uniqueMocks];
+  }, [backendClaims, mockClaims]);
+
+  // Auto-select initial claim or first claim
+  useEffect(() => {
+    if (initialClaimId && allClaims.some((c) => c.id === initialClaimId)) {
+      setSelectedClaimId(initialClaimId);
+    } else if (!selectedClaimId && allClaims.length > 0) {
+      setSelectedClaimId(allClaims[0].id);
+    }
+  }, [initialClaimId, allClaims, selectedClaimId]);
+
+  const activeClaim = allClaims.find((c) => c.id === selectedClaimId) || allClaims[0];
   const isUnlocked = activeClaim ? Boolean(unlockedClaims[activeClaim.id]) : false;
+
+  // Load evidence URL when activeClaim changes and is from backend
+  useEffect(() => {
+    setEvidenceUrl('');
+    if (activeClaim?.isBackend && activeClaim.hasEvidence) {
+      api.claims
+        .getEvidenceUrl(activeClaim.id)
+        .then((res) => {
+          if (res?.data?.evidenceUrl) setEvidenceUrl(res.data.evidenceUrl);
+        })
+        .catch(() => {
+          setEvidenceUrl('');
+        });
+    }
+  }, [activeClaim]);
 
   const handleSelectClaim = (id) => {
     setSelectedClaimId(id);
@@ -49,10 +130,10 @@ export default function ClaimsView({ onNavigate, initialClaimId }) {
     if (!activeClaim) return;
     await copyShareLink('claims', { claimId: activeClaim.id });
     setCopiedClaim(true);
-    setTimeout(() => setCopiedClaim(false), 2200);
+    setTimeout(() => setCopiedClaim(false), 2000);
   };
 
-  const handleRevealClue = () => {
+  const handleUnlockClueRequest = () => {
     setShowStaffAuthModal(true);
   };
 
@@ -63,277 +144,337 @@ export default function ClaimsView({ onNavigate, initialClaimId }) {
     setShowStaffAuthModal(false);
   };
 
-  const handleMaskClue = () => {
-    if (activeClaim) {
-      setUnlockedClaims((prev) => ({ ...prev, [activeClaim.id]: false }));
+  const handleApprove = async () => {
+    if (!activeClaim) return;
+    setActionLoading(true);
+    try {
+      if (activeClaim.isBackend) {
+        await api.claims.decision(activeClaim.id, 'APPROVED', 'Ownership confirmed by moderator verification.');
+        fetchBackendClaims();
+      }
+      updateClaimStatus(activeClaim.id, 'Approved');
+      setActionMessage({
+        type: 'success',
+        text: `Claim for "${activeClaim.itemTitle}" has been APPROVED. Claimant has been sent collection coordinates at ${activeClaim.holdingLocation}.`,
+      });
+    } catch (err) {
+      setActionMessage({
+        type: 'error',
+        text: `Approval failed: ${err.message || 'Error occurred'}`,
+      });
+    } finally {
+      setActionLoading(false);
     }
   };
 
-  const handleApprove = () => {
+  const handleRequestInfo = async () => {
     if (!activeClaim) return;
-    updateClaimStatus(activeClaim.id, 'Approved');
-    setActionMessage({
-      type: 'success',
-      text: `Claim for "${activeClaim.itemTitle}" has been approved. The claimant has been notified to pick up their item at ${activeClaim.location}.`,
-    });
+    setActionLoading(true);
+    try {
+      if (activeClaim.isBackend) {
+        await api.claims.decision(activeClaim.id, 'MORE_INFO_REQUESTED', 'Additional verification details requested.');
+        fetchBackendClaims();
+      }
+      updateClaimStatus(activeClaim.id, 'Under Review');
+      setActionMessage({
+        type: 'info',
+        text: `Additional verification questions sent to ${activeClaim.claimantEmail}. Status set to Under Review.`,
+      });
+    } catch (err) {
+      setActionMessage({
+        type: 'error',
+        text: `Request info failed: ${err.message || 'Error occurred'}`,
+      });
+    } finally {
+      setActionLoading(false);
+    }
   };
 
-  const handleReject = () => {
+  const handleReject = async () => {
     if (!activeClaim) return;
-    updateClaimStatus(activeClaim.id, 'Rejected');
-    setActionMessage({
-      type: 'error',
-      text: `Claim for "${activeClaim.itemTitle}" has been rejected.`,
-    });
-  };
-
-  const handleRequestInfo = () => {
-    if (!activeClaim) return;
-    setActionMessage({
-      type: 'info',
-      text: `Automated inquiry dispatched to ${activeClaim.claimant} requesting supplementary purchase receipt or serial photo.`,
-    });
+    setActionLoading(true);
+    try {
+      if (activeClaim.isBackend) {
+        await api.claims.decision(activeClaim.id, 'REJECTED', 'Details provided do not match the item.');
+        fetchBackendClaims();
+      }
+      updateClaimStatus(activeClaim.id, 'Rejected');
+      setActionMessage({
+        type: 'warning',
+        text: `Claim for "${activeClaim.itemTitle}" has been REJECTED. Ownership proofs did not match item attributes.`,
+      });
+    } catch (err) {
+      setActionMessage({
+        type: 'error',
+        text: `Rejection failed: ${err.message || 'Error occurred'}`,
+      });
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full max-w-6xl mx-auto">
-      {/* ── Left Sidebar: Claims Queue ── */}
-      <FloatingPanel title="Claims Queue" className="lg:col-span-1">
-        <p className="text-xs text-[#E5E4E2]/70 mb-3">
-          Select a pending claim submitted by a student or staff member:
-        </p>
-        <div className="space-y-2.5">
-          {claims.map((claim) => {
-            const isSelected = claim.id === activeClaim?.id;
-            return (
-              <div
-                key={claim.id}
-                onClick={() => handleSelectClaim(claim.id)}
-                className={`p-4 rounded-xl border cursor-pointer transition-all ${
-                  isSelected
-                    ? 'bg-[#1D110C] border-[#E6E0F0]/70 border-l-4 border-l-[#E6E0F0] shadow-lg'
-                    : 'bg-[#140C08]/80 border-[#6F4E37]/45 hover:border-[#6F4E37]/80 hover:bg-[#1A100B]'
-                }`}
-              >
-                <div className="flex justify-between items-start gap-2">
-                  <p className="text-sm font-semibold text-[#FAF9F8] truncate">{claim.itemTitle}</p>
-                  <span
-                    className={`shrink-0 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border ${
-                      claim.status === 'Approved'
-                        ? 'bg-emerald-950/60 text-emerald-300 border-emerald-500/40'
-                        : claim.status === 'Rejected'
-                        ? 'bg-rose-950/60 text-rose-300 border-rose-500/40'
-                        : 'bg-[#E6E0F0]/15 text-[#E6E0F0] border-[#E6E0F0]/30'
+    <div className="mx-auto flex w-full max-w-6xl flex-col space-y-6">
+      <FloatingPanel title="Ownership Verification &amp; Custody Desk">
+        {actionMessage && (
+          <div
+            className={`mb-4 p-4 rounded-xl border text-xs sm:text-sm font-medium flex items-center justify-between gap-3 animate-fadeIn ${
+              actionMessage.type === 'success'
+                ? 'bg-emerald-950/50 border-emerald-500/50 text-emerald-200'
+                : actionMessage.type === 'warning'
+                ? 'bg-amber-950/50 border-amber-500/50 text-amber-200'
+                : 'bg-[#25150E] border-[#6F4E37] text-[#FAF9F8]'
+            }`}
+          >
+            <span>{actionMessage.text}</span>
+            <button
+              type="button"
+              onClick={() => setActionMessage(null)}
+              className="text-xs underline opacity-80 hover:opacity-100 shrink-0"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* ── Left Column: Claims List ── */}
+          <div className="lg:col-span-1 border border-[#6F4E37]/45 rounded-xl bg-[#140C08]/80 p-3 flex flex-col gap-2 max-h-[720px] overflow-y-auto">
+            <div className="flex items-center justify-between pb-2 border-b border-[#6F4E37]/30 px-1">
+              <span className="text-xs font-semibold text-[#E6E0F0] uppercase tracking-wider flex items-center gap-1.5">
+                <ShieldCheck size={14} className="text-[#C68B59]" /> Submitted Claims
+              </span>
+              <span className="text-xs text-[#E5E4E2]/60 font-mono">
+                {allClaims.length} Total
+              </span>
+            </div>
+
+            {loading ? (
+              <div className="p-8 text-center text-xs text-[#E5E4E2]/60">Loading claims...</div>
+            ) : allClaims.length === 0 ? (
+              <div className="p-8 text-center text-xs text-[#E5E4E2]/60">
+                No active ownership claims found.
+              </div>
+            ) : (
+              allClaims.map((claim) => {
+                const isSelected = claim.id === activeClaim?.id;
+                const isApproved = claim.status === 'Approved';
+                const isRejected = claim.status === 'Rejected';
+
+                return (
+                  <button
+                    key={claim.id}
+                    type="button"
+                    onClick={() => handleSelectClaim(claim.id)}
+                    className={`text-left p-3 rounded-lg border transition flex flex-col gap-1.5 relative overflow-hidden ${
+                      isSelected
+                        ? 'bg-[#231510] border-[#E6E0F0]/50 shadow-md ring-1 ring-[#6F4E37]'
+                        : 'bg-[#180E0A]/60 border-[#6F4E37]/35 hover:bg-[#1E110C]'
                     }`}
                   >
-                    {claim.status}
-                  </span>
-                </div>
-                <p className="text-xs text-[#E5E4E2]/70 mt-1">Claimant: {claim.claimant}</p>
-                <div className="flex items-center gap-2 mt-2 text-[11px] text-[#C68B59]">
-                  <Clock size={11} /> {claim.submittedTime}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </FloatingPanel>
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-xs font-bold text-[#FAF9F8] truncate">
+                        {claim.itemTitle}
+                      </span>
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider shrink-0 ${
+                          isApproved
+                            ? 'bg-emerald-950/70 text-emerald-300 border border-emerald-500/40'
+                            : isRejected
+                            ? 'bg-rose-950/70 text-rose-300 border border-rose-500/40'
+                            : 'bg-[#6F4E37]/40 text-[#E6E0F0] border border-[#6F4E37]/60'
+                        }`}
+                      >
+                        {claim.status}
+                      </span>
+                    </div>
 
-      {/* ── Right Panel: Two-Step Ownership Claim Review ── */}
-      <FloatingPanel title="Ownership Verification Desk" className="lg:col-span-2">
-        {activeClaim ? (
-          <div className="flex flex-col space-y-5">
-            {/* Action Feedback Banner */}
-            {actionMessage && (
-              <div
-                className={`p-3.5 rounded-xl text-xs sm:text-sm border flex items-center justify-between gap-3 animate-fadeIn ${
-                  actionMessage.type === 'success'
-                    ? 'bg-emerald-950/50 border-emerald-500/50 text-emerald-200'
-                    : actionMessage.type === 'error'
-                    ? 'bg-rose-950/50 border-rose-500/50 text-rose-200'
-                    : 'bg-[#2E1D16] border-[#6F4E37]/80 text-[#E5E4E2]'
-                }`}
-              >
-                <span>{actionMessage.text}</span>
-                <button
-                  type="button"
-                  onClick={() => setActionMessage(null)}
-                  className="hover:opacity-75 p-1"
-                  aria-label="Dismiss banner"
-                >
-                  <X size={14} />
-                </button>
-              </div>
+                    <p className="text-[11px] text-[#E5E4E2]/70 truncate">
+                      Claimant: {claim.claimantName}
+                    </p>
+
+                    <div className="flex items-center justify-between text-[10px] text-[#E5E4E2]/50 pt-1 border-t border-[#6F4E37]/25">
+                      <span>{claim.category}</span>
+                      <span>{claim.claimDate}</span>
+                    </div>
+                  </button>
+                );
+              })
             )}
+          </div>
 
-            {/* Claim Header Details */}
-            <div className="bg-[#140C08]/90 rounded-2xl p-5 sm:p-6 border border-[#6F4E37]/60 space-y-4 shadow-xl">
-              <div className="flex flex-wrap justify-between items-start gap-3">
-                <div>
-                  <span className="text-[11px] uppercase tracking-wider font-bold text-[#C68B59]">
-                    Claim Reference #{activeClaim.id.toUpperCase()}
-                  </span>
-                  <h3 className="text-xl font-bold text-[#FAF9F8] mt-0.5">{activeClaim.itemTitle}</h3>
-                  <p className="text-xs sm:text-sm text-[#E5E4E2]/75 mt-1 flex items-center gap-2">
-                    <span>Submitted by <strong className="text-[#FAF9F8]">{activeClaim.claimant}</strong></span>
-                    <span className="text-[#6F4E37]">•</span>
-                    <span>ID: {activeClaim.studentIdMasked}</span>
-                  </p>
-                </div>
+          {/* ── Right Column: Active Claim Details & Two-Step Verification ── */}
+          <div className="lg:col-span-2 border border-[#6F4E37]/45 rounded-xl bg-[#140C08]/80 p-5 space-y-5">
+            {activeClaim ? (
+              <>
+                {/* Header info */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#6F4E37]/30 pb-4">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[11px] font-mono text-[#E5E4E2]/60">
+                        Claim Ref: #{String(activeClaim.id).slice(-6)}
+                      </span>
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
+                          activeClaim.status === 'Approved'
+                            ? 'bg-emerald-950/70 text-emerald-300 border border-emerald-500/40'
+                            : 'bg-[#6F4E37]/30 text-[#E6E0F0] border border-[#6F4E37]/50'
+                        }`}
+                      >
+                        {activeClaim.status}
+                      </span>
+                    </div>
+                    <h3 className="text-xl font-bold text-[#FAF9F8]">
+                      {activeClaim.itemTitle}
+                    </h3>
+                  </div>
 
-                <div className="flex flex-wrap items-center gap-2">
+                  {/* Share claim button */}
                   <button
                     type="button"
                     onClick={handleShareClaim}
-                    className={`px-3 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition ${
-                      copiedClaim
-                        ? 'bg-emerald-950/60 text-emerald-300 border-emerald-500/50'
-                        : 'bg-[#1E130E] text-[#E5E4E2] border-[#6F4E37]/60 hover:bg-[#341F18]'
-                    }`}
-                    title="Copy direct share link for this claim"
+                    className="self-start sm:self-center px-3 py-1.5 rounded-lg border border-[#6F4E37]/50 bg-[#1B110C] hover:bg-[#25150F] text-xs font-semibold text-[#E5E4E2] flex items-center gap-1.5 transition"
                   >
                     {copiedClaim ? (
                       <>
-                        <Check size={13} /> Link Copied!
+                        <Check size={13} className="text-emerald-400" /> Link Copied
                       </>
                     ) : (
                       <>
-                        <Share2 size={13} /> Share Link
+                        <Share2 size={13} /> Share Claim Link
                       </>
                     )}
                   </button>
-
-                  <div className="bg-[#1E130E] px-3 py-1.5 rounded-lg border border-[#6F4E37]/60 text-xs text-[#E6E0F0] flex items-center gap-1.5">
-                    <Clock size={13} /> {activeClaim.submittedTime}
-                  </div>
-                  <span
-                    className={`text-xs uppercase font-bold tracking-wider px-3 py-1.5 rounded-lg border ${
-                      activeClaim.status === 'Approved'
-                        ? 'bg-emerald-950/60 text-emerald-300 border-emerald-500/50'
-                        : activeClaim.status === 'Rejected'
-                        ? 'bg-rose-950/60 text-rose-300 border-rose-500/50'
-                        : 'bg-[#6F4E37]/35 text-[#E6E0F0] border-[#6F4E37]/70'
-                    }`}
-                  >
-                    {activeClaim.status}
-                  </span>
                 </div>
-              </div>
 
-              <div className="flex items-center gap-2 text-xs text-[#E5E4E2]/70 pt-1 border-t border-[#6F4E37]/30">
-                <MapPin size={13} className="text-[#C68B59]" /> Found at: {activeClaim.location}
-              </div>
-
-              {/* ── Two-Step Verification Section ── */}
-              <div className="pt-2 space-y-3">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-semibold text-[#E6E0F0] flex items-center gap-2">
-                    <Lock size={15} /> Private Ownership Clue
-                  </h4>
-                  {isUnlocked && (
-                    <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400 font-medium">
-                      <ShieldCheck size={13} /> Staff Authenticated
+                {/* Metadata summary grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                  <div className="p-2.5 rounded-lg bg-[#190F0B] border border-[#6F4E37]/35">
+                    <span className="text-[#E5E4E2]/50 block mb-0.5">Claimant</span>
+                    <span className="text-[#FAF9F8] font-semibold truncate block">
+                      {activeClaim.claimantName}
                     </span>
-                  )}
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-[#190F0B] border border-[#6F4E37]/35">
+                    <span className="text-[#E5E4E2]/50 block mb-0.5">Category</span>
+                    <span className="text-[#FAF9F8] font-semibold">{activeClaim.category}</span>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-[#190F0B] border border-[#6F4E37]/35">
+                    <span className="text-[#E5E4E2]/50 block mb-0.5">Campus Zone</span>
+                    <span className="text-[#FAF9F8] font-semibold truncate block">
+                      {activeClaim.location}
+                    </span>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-[#190F0B] border border-[#6F4E37]/35">
+                    <span className="text-[#E5E4E2]/50 block mb-0.5">Filing Date</span>
+                    <span className="text-[#FAF9F8] font-semibold">{activeClaim.claimDate}</span>
+                  </div>
                 </div>
 
-                {isUnlocked ? (
-                  /* Revealed State */
-                  <div className="p-4 bg-[#100805] rounded-xl border border-emerald-500/40 space-y-3 animate-fadeIn">
-                    <div className="flex justify-between items-start gap-2">
-                      <div className="text-sm text-[#FAF9F8] font-mono leading-relaxed">
-                        &ldquo;{activeClaim.privateClue}&rdquo;
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleMaskClue}
-                        className="text-xs text-[#E5E4E2]/60 hover:text-[#FAF9F8] flex items-center gap-1 px-2.5 py-1 rounded bg-[#1B110C] border border-[#6F4E37]/50 shrink-0 transition"
-                      >
-                        <EyeOff size={13} /> Mask
-                      </button>
-                    </div>
-
-                    <div className="pt-2 border-t border-[#6F4E37]/25 text-xs text-emerald-300/90 flex items-center gap-1.5">
-                      <CheckCircle size={14} /> Private detail revealed for authorized staff inspection.
-                    </div>
-                  </div>
-                ) : (
-                  /* Masked Two-Step Verification Gate */
-                  <div className="p-5 bg-[#100805]/95 rounded-xl border border-[#6F4E37]/60 relative overflow-hidden space-y-3">
-                    <div className="flex items-center gap-2 text-xs font-semibold text-[#C68B59]">
-                      <ShieldAlert size={15} /> Two-Step Verification Guard Active
-                    </div>
-
-                    {/* Masked clue representation */}
-                    <div className="p-3 bg-[#0B0604] rounded-lg border border-[#6F4E37]/30 font-mono text-sm tracking-widest text-[#E5E4E2]/35 select-none blur-[1px]">
-                      ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
-                    </div>
-
-                    <p className="text-xs text-[#E5E4E2]/70 leading-relaxed">
-                      To prevent fraud, private ownership notes submitted by claimants remain encrypted until authorized by campus desk personnel.
-                    </p>
+                {/* ── Two-Step Verification Clue Section ── */}
+                <div className="rounded-xl border border-[#6F4E37]/60 bg-[#190F0B] p-4 space-y-2.5 relative overflow-hidden">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-[#E6E0F0] uppercase tracking-wider flex items-center gap-1.5">
+                      <Lock size={13} className="text-[#C68B59]" /> Claimant Ownership Clue (Confidential)
+                    </span>
 
                     <button
                       type="button"
-                      onClick={handleRevealClue}
-                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#6F4E37] hover:bg-[#8C5E43] text-[#FAF9F8] text-xs font-semibold rounded-lg border border-[#E5E4E2]/20 shadow-md transition"
+                      onClick={() => (isUnlocked ? setUnlockedClaims((p) => ({ ...p, [activeClaim.id]: false })) : handleUnlockClueRequest())}
+                      className="text-xs px-2.5 py-1 rounded bg-[#231510] hover:bg-[#301C15] text-[#FAF9F8] border border-[#6F4E37]/50 flex items-center gap-1 transition"
                     >
-                      <Eye size={14} /> Verify Staff ID &amp; Reveal Clue
+                      {isUnlocked ? (
+                        <>
+                          <EyeOff size={12} /> Mask Clue
+                        </>
+                      ) : (
+                        <>
+                          <Eye size={12} /> Reveal Secret Clue
+                        </>
+                      )}
                     </button>
                   </div>
-                )}
-              </div>
 
-              {/* System Verification Match */}
-              <div className="pt-2">
-                <h4 className="text-sm font-semibold text-[#E5E4E2] mb-2 flex items-center gap-2">
-                  <Fingerprint size={15} className="text-[#C68B59]" /> System Registry Comparison
-                </h4>
-                <div className="p-4 bg-[#100805] rounded-xl text-xs sm:text-sm text-[#E5E4E2]/85 border border-[#6F4E37]/40 leading-relaxed">
-                  {activeClaim.systemMatchNote}
+                  <div className="p-3.5 rounded-lg bg-[#100805] border border-[#6F4E37]/40 text-xs sm:text-sm leading-relaxed">
+                    {isUnlocked ? (
+                      <p className="text-[#FAF9F8] font-mono break-words">
+                        {activeClaim.secretClueSubmitted}
+                      </p>
+                    ) : (
+                      <div className="space-y-1">
+                        <p className="font-mono text-[#E5E4E2]/50 tracking-widest select-none">
+                          ••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+                        </p>
+                        <p className="text-[11px] text-[#C68B59]">
+                          Protected under privacy safeguards. Click &quot;Reveal Secret Clue&quot; to authorize inspection.
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
+
+                {/* Evidence Photo if present */}
+                {evidenceUrl && (
+                  <div className="space-y-2">
+                    <span className="text-xs font-semibold text-[#E6E0F0] uppercase tracking-wider flex items-center gap-1.5">
+                      <ImageIcon size={14} className="text-[#C68B59]" /> Photographic Ownership Evidence
+                    </span>
+                    <div className="max-w-xs max-h-48 overflow-hidden rounded-xl border border-[#6F4E37]/50 bg-black">
+                      <img src={evidenceUrl} alt="Claim private evidence" className="object-contain w-full h-full" />
+                    </div>
+                  </div>
+                )}
+
+                {/* System Registry Comparison */}
+                <div className="p-3.5 rounded-xl bg-[#120906] border border-[#6F4E37]/35 text-xs space-y-1">
+                  <span className="font-semibold text-[#C68B59] flex items-center gap-1.5">
+                    <Fingerprint size={13} /> System Verification Check
+                  </span>
+                  <p className="text-[#E5E4E2]/80 leading-relaxed">
+                    {activeClaim.systemMatchNote || 'Registry check matches category, approximate loss timeline, and holding custody zone.'}
+                  </p>
+                </div>
+
+                {/* Decision Actions */}
+                <div className="pt-3 border-t border-[#6F4E37]/30 flex flex-wrap gap-2.5">
+                  <button
+                    type="button"
+                    disabled={actionLoading || activeClaim.status === 'Approved'}
+                    onClick={handleApprove}
+                    className="flex-1 py-3 px-4 rounded-xl bg-[#6F4E37] hover:bg-[#8C5E43] text-[#FAF9F8] font-bold text-xs transition border border-[#E5E4E2]/20 flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  >
+                    <Check size={15} /> {activeClaim.status === 'Approved' ? 'Claim Approved' : 'Approve Claim'}
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={actionLoading}
+                    onClick={handleRequestInfo}
+                    className="flex-1 py-3 px-4 rounded-xl bg-[#231510] hover:bg-[#321E17] text-[#E5E4E2] font-semibold text-xs transition border border-[#6F4E37]/60 flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  >
+                    <Mail size={14} className="text-[#C68B59]" /> Request More Info
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={actionLoading || activeClaim.status === 'Rejected'}
+                    onClick={handleReject}
+                    className="py-3 px-4 rounded-xl bg-red-950/60 hover:bg-red-900/60 text-red-300 font-semibold text-xs transition border border-red-800/50 flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  >
+                    <X size={15} /> Reject
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="py-20 text-center text-xs text-[#E5E4E2]/60">
+                Select a claim from the list to review details.
               </div>
-            </div>
-
-            {/* Moderation Action Buttons */}
-            <div className="flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={handleApprove}
-                disabled={activeClaim.status === 'Approved'}
-                className={`flex-1 py-3 px-5 rounded-xl font-semibold shadow-lg transition flex justify-center items-center gap-2 border ${
-                  activeClaim.status === 'Approved'
-                    ? 'bg-emerald-950/40 text-emerald-400 border-emerald-500/30 opacity-70 cursor-not-allowed'
-                    : 'bg-[#6F4E37] hover:bg-[#8C5E43] text-[#FAF9F8] border-[#E5E4E2]/25'
-                }`}
-              >
-                <Check size={17} /> {activeClaim.status === 'Approved' ? 'Claim Approved' : 'Approve Claim'}
-              </button>
-
-              <button
-                type="button"
-                onClick={handleRequestInfo}
-                className="flex-1 bg-[#241611] hover:bg-[#331F18] text-[#E5E4E2] py-3 px-5 rounded-xl border border-[#6F4E37]/60 transition font-medium text-xs sm:text-sm flex justify-center items-center gap-1.5"
-              >
-                <Mail size={15} className="text-[#C68B59]" /> Request More Info
-              </button>
-
-              <button
-                type="button"
-                onClick={handleReject}
-                disabled={activeClaim.status === 'Rejected'}
-                className="bg-[#180E0A] hover:bg-[#281610] text-[#E6E0F0] px-5 py-3 rounded-xl border border-[#6F4E37]/40 transition font-medium flex justify-center items-center gap-1.5 text-xs sm:text-sm"
-              >
-                <X size={16} /> Reject
-              </button>
-            </div>
+            )}
           </div>
-        ) : (
-          <div className="p-8 text-center text-sm text-[#E5E4E2]/60">No claim selected.</div>
-        )}
+        </div>
       </FloatingPanel>
 
-      {/* ── Two-Step Verification Staff Confirmation Modal ── */}
+      {/* ── Two-Step Verification Staff Auth Modal ── */}
       {showStaffAuthModal && (
         <div
           className="fixed inset-0 z-50 bg-[#0E0805]/85 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn"
@@ -362,7 +503,7 @@ export default function ClaimsView({ onNavigate, initialClaimId }) {
               <div className="flex justify-between text-[#E5E4E2]/80">
                 <span>Duty Officer:</span>
                 <span className="text-[#FAF9F8] font-semibold flex items-center gap-1">
-                  <UserCheck size={12} className="text-emerald-400" /> Sharma, D. (ID #8841)
+                  <UserCheck size={12} className="text-emerald-400" /> {user?.displayName || 'Campus Staff'}
                 </span>
               </div>
             </div>

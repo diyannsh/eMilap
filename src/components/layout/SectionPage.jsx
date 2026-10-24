@@ -10,7 +10,7 @@ const sectionDescriptions = {
   'Ownership Claims': 'Review the private details used to confirm the owner of an item.',
   Updates: 'Find updates related to your lost-and-found reports.',
   Moderation: 'Review reports and ownership claims that may need attention.',
-  'Account Settings': 'Manage your eMilap account preferences.',
+  'Account Settings': 'Manage your e-Milap account preferences.',
 };
 
 export default function SectionPage({ title, children, transitionPending = false }) {
@@ -24,7 +24,7 @@ export default function SectionPage({ title, children, transitionPending = false
         <div className="section-page-heading">
           <p>Campus Lost &amp; Found</p>
           <h1>{title}</h1>
-          <span>{sectionDescriptions[title] ?? 'Use eMilap to report, find, and return items on campus.'}</span>
+          <span>{sectionDescriptions[title] ?? 'Use e-Milap to report, find, and return items on campus.'}</span>
         </div>
         <div className="section-page-panels">{children}</div>
       </div>

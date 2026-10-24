@@ -1,4 +1,4 @@
-﻿
+
 import { useEffect, useRef, useState } from 'react';
 import './Topography.css';
 
@@ -1513,4 +1513,3 @@ const Topography = ({
 };
 
 export default Topography;
-

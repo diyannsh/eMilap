@@ -1,0 +1,343 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Dimension: 384 for MiniLM-L6-v2 (documented; configurable by model selection)
+// Vector operations use raw parameterized SQL via $queryRaw, not ORM fields.
+
+enum CommunityRole {
+  MEMBER
+  MODERATOR
+  ADMIN
+  @@map("community_role")
+}
+
+enum MembershipStatus {
+  ACTIVE
+  PENDING
+  SUSPENDED
+  @@map("membership_status")
+}
+
+enum ReportType {
+  LOST
+  FOUND
+  @@map("report_type")
+}
+
+enum ReportStatus {
+  OPEN
+  MATCHED
+  CLAIM_PENDING
+  RESOLVED
+  CLOSED
+  REMOVED
+  @@map("report_status")
+}
+
+enum ClaimStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  MORE_INFO_REQUESTED
+  APPROVED
+  REJECTED
+  WITHDRAWN
+  @@map("claim_status")
+}
+
+enum MatchStatus {
+  ACTIVE
+  REJECTED
+  DISMISSED
+  RESOLVED
+  SUPERSEDED
+  @@map("match_status")
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  RETRY
+  COMPLETED
+  FAILED
+  @@map("job_status")
+}
+
+model User {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email           String   @unique
+  passwordHash    String   @map("password_hash")
+  displayName     String   @map("display_name")
+  emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamptz
+  disabledAt      DateTime? @map("disabled_at") @db.Timestamptz
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  memberships     CommunityMembership[]
+  reports         ItemReport[]
+  claims          OwnershipClaim[] @relation("Claimant")
+  notifications   Notification[]
+  auditLogs       AuditLog[]
+
+  @@map("users")
+}
+
+model Community {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug        String   @unique
+  name        String
+  description String?
+  timezone    String   @default("UTC")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  memberships CommunityMembership[]
+  reports     ItemReport[]
+  matchingJobs MatchingJob[]
+  notifications Notification[]
+  matchCandidates MatchCandidate[]
+  auditLogs   AuditLog[]
+
+  @@map("communities")
+}
+
+model CommunityMembership {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  communityId String   @map("community_id") @db.Uuid
+  role        CommunityRole @default(MEMBER)
+  status      MembershipStatus @default(ACTIVE)
+  joinedAt    DateTime @default(now()) @map("joined_at") @db.Timestamptz
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, communityId])
+  @@index([communityId, status])
+  @@index([userId, status])
+  @@map("community_memberships")
+}
+
+model ItemReport {
+  id                  String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  communityId         String       @map("community_id") @db.Uuid
+  reporterId          String       @map("reporter_id") @db.Uuid
+  reportType          ReportType   @map("report_type")
+  status              ReportStatus @default(OPEN)
+  title               String
+  publicDescription   String       @map("public_description")
+  category            String
+  color               String?
+  brand               String?
+  approximateLocation String?      @map("approximate_location")
+  occurredAt          DateTime?    @map("occurred_at") @db.Timestamptz
+  occurredAtIsApprox  Boolean      @default(false) @map("occurred_at_is_approximate")
+  expiresAt           DateTime?    @map("expires_at") @db.Timestamptz
+  version             Int          @default(1)
+  createdAt           DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+  resolvedAt          DateTime?    @map("resolved_at") @db.Timestamptz
+  removedAt           DateTime?    @map("removed_at") @db.Timestamptz
+  community           Community    @relation(fields: [communityId], references: [id], onDelete: Restrict)
+  reporter            User         @relation(fields: [reporterId], references: [id], onDelete: Restrict)
+  images              ItemImage[]
+  attributes          ItemAttribute[]
+  claims              OwnershipClaim[]
+  privateDetails     PrivateReportDetails?
+  embeddings          ItemEmbedding[]
+  matchCandidatesA    MatchCandidate[] @relation("MatchCandidateA")
+  matchCandidatesB    MatchCandidate[] @relation("MatchCandidateB")
+  matchingJobs        MatchingJob[]
+  history             ReportStatusHistory[]
+
+  @@index([communityId, reportType, status, createdAt])
+  @@index([reporterId, createdAt])
+  @@map("item_reports")
+}
+
+model PrivateReportDetails {
+  reportId            String   @id @map("report_id") @db.Uuid
+  detailsCiphertext   Bytes    @map("details_ciphertext")
+  encryptionKeyVersion String  @map("encryption_key_version")
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  report              ItemReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@map("private_report_details")
+}
+
+model ItemImage {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reportId        String   @map("report_id") @db.Uuid
+  objectKey       String   @unique @map("object_key")
+  mimeType        String   @map("mime_type")
+  byteSize        BigInt   @map("byte_size")
+  widthPx         Int?     @map("width_px")
+  heightPx        Int?     @map("height_px")
+  altText         String?  @map("alt_text")
+  sortOrder       Int      @default(0) @map("sort_order")
+  moderationState String   @default("PENDING") @map("moderation_state")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  report          ItemReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId, sortOrder])
+  @@map("item_images")
+}
+
+model ItemAttribute {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reportId         String   @map("report_id") @db.Uuid
+  name             String
+  normalizedValue String   @map("normalized_value")
+  visibility       String   @default("PUBLIC")
+  source           String   @default("USER")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+  report           ItemReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@unique([reportId, name, normalizedValue])
+  @@index([name, normalizedValue])
+  @@map("item_attributes")
+}
+
+model ItemEmbedding {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reportId        String   @map("report_id") @db.Uuid
+  modality        String   @default("TEXT")
+  provider        String
+  modelName       String   @map("model_name")
+  modelVersion    String   @map("model_version")
+  dimensions      Int
+  // Vector column is managed via raw SQL (pgvector); not declared here to avoid ORM limitation
+  contentHash     String   @map("content_hash")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  report          ItemReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
+  @@map("item_embeddings")
+}
+
+model MatchCandidate {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  communityId     String   @map("community_id") @db.Uuid
+  reportAId       String   @map("report_a_id") @db.Uuid
+  reportBId       String   @map("report_b_id") @db.Uuid
+  status          MatchStatus @default(ACTIVE)
+  score           Decimal  @db.Decimal(5, 2)
+  scoreBreakdown  Json     @default("{}") @map("score_breakdown")
+  algorithmVersion String  @map("algorithm_version")
+  reportAVersion  Int      @map("report_a_version")
+  reportBVersion  Int      @map("report_b_version")
+  lastScoredAt    DateTime @default(now()) @map("last_scored_at") @db.Timestamptz
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  community       Community @relation(fields: [communityId], references: [id], onDelete: Restrict)
+  reportA         ItemReport @relation("MatchCandidateA", fields: [reportAId], references: [id], onDelete: Cascade)
+  reportB         ItemReport @relation("MatchCandidateB", fields: [reportBId], references: [id], onDelete: Cascade)
+
+  @@unique([reportAId, reportBId])
+  @@index([communityId, score])
+  @@map("match_candidates")
+}
+
+model OwnershipClaim {
+  id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reportId      String      @map("report_id") @db.Uuid
+  claimantId    String      @map("claimant_id") @db.Uuid
+  status        ClaimStatus @default(SUBMITTED)
+  message       String
+  reviewerId    String?     @map("reviewer_id") @db.Uuid
+  decisionReason String?    @map("decision_reason")
+  submittedAt   DateTime    @default(now()) @map("submitted_at") @db.Timestamptz
+  reviewedAt    DateTime?   @map("reviewed_at") @db.Timestamptz
+  updatedAt     DateTime    @updatedAt @map("updated_at") @db.Timestamptz
+  claimEvidence ClaimEvidence[]
+  report        ItemReport  @relation(fields: [reportId], references: [id], onDelete: Restrict)
+  claimant      User        @relation("Claimant", fields: [claimantId], references: [id], onDelete: Restrict)
+
+  @@index([reportId, status, submittedAt])
+  @@index([claimantId, submittedAt])
+  @@map("ownership_claims")
+}
+
+model ClaimEvidence {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  claimId     String   @map("claim_id") @db.Uuid
+  objectKey   String   @unique @map("object_key")
+  evidenceType String  @map("evidence_type")
+  mimeType    String   @map("mime_type")
+  byteSize    BigInt   @map("byte_size")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  claim       OwnershipClaim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+
+  @@map("claim_evidence")
+}
+
+model Notification {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  communityId String? @map("community_id") @db.Uuid
+  kind       String
+  payload    Json     @default("{}") @map("payload")
+  dedupeKey  String   @unique @map("dedupe_key")
+  readAt     DateTime? @map("read_at") @db.Timestamptz
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  community  Community? @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+model ReportStatusHistory {
+  id         String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reportId   String     @map("report_id") @db.Uuid
+  actorId    String?    @map("actor_id") @db.Uuid
+  fromStatus ReportStatus? @map("from_status")
+  toStatus   ReportStatus @map("to_status")
+  reasonCode String?    @map("reason_code")
+  createdAt  DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  report     ItemReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId, createdAt])
+  @@map("report_status_history")
+}
+
+model AuditLog {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  communityId String?  @map("community_id") @db.Uuid
+  actorId    String?  @map("actor_id") @db.Uuid
+  action     String
+  targetType String   @map("target_type")
+  targetId   String?  @map("target_id") @db.Uuid
+  metadata   Json     @default("{}") @map("metadata")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+  community  Community? @relation(fields: [communityId], references: [id], onDelete: SetNull)
+  actor      User?     @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([communityId, createdAt])
+  @@index([targetType, targetId, createdAt])
+  @@map("audit_logs")
+}
+
+model MatchingJob {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  communityId   String    @map("community_id") @db.Uuid
+  reportId      String    @map("report_id") @db.Uuid
+  reportVersion Int       @map("report_version")
+  status        JobStatus @default(PENDING)
+  attempts      Int       @default(0)
+  availableAt   DateTime  @default(now()) @map("available_at") @db.Timestamptz
+  lockedAt      DateTime? @map("locked_at") @db.Timestamptz
+  lockedBy      String?   @map("locked_by")
+  lastErrorCode String?   @map("last_error_code")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  community     Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  report        ItemReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@unique([reportId, reportVersion])
+  @@map("matching_jobs")
+}

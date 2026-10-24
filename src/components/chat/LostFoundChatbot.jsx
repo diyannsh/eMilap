@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Bot, MessageSquare, Send, Sparkles, X } from 'lucide-react';
+import { ArrowRight, Bot, MessageSquare, Send, ShieldAlert, Sparkles, X } from 'lucide-react';
 import { QUICK_QUERIES, matchLostFoundQuery } from './lostFoundKnowledge.js';
+import { api } from '../../lib/api.js';
+import { useAuth } from '../../context/AuthContext.jsx';
 import './LostFoundChatbot.css';
 
 function formatMessageText(text) {
@@ -32,6 +34,7 @@ function formatMessageText(text) {
 }
 
 export default function LostFoundChatbot({ visible = true, onNavigate }) {
+  const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [inputVal, setInputVal] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -42,7 +45,7 @@ export default function LostFoundChatbot({ visible = true, onNavigate }) {
     {
       id: 'welcome',
       sender: 'bot',
-      text: "Hello! 👋 I'm **Milap.ai**, your campus lost & found assistant.\n\nI can answer questions regarding lost items, reporting found goods, proving ownership, or finding the campus desk. Select a quick query below or type your question!",
+      text: "Hello! 👋 I'm **Milap.ai**, your campus lost & found assistant.\n\nI can answer questions regarding lost items, reporting found goods, proving ownership, or finding the campus desk. Select a quick query below or type your question!\n\n*(Privacy note: Never enter passwords, card numbers, or secret ownership clues here.)*",
       showQuickQueries: true,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
@@ -62,9 +65,9 @@ export default function LostFoundChatbot({ visible = true, onNavigate }) {
     }
   }, [isOpen, messages, isTyping]);
 
-  const handleSend = (textToSend = inputVal) => {
+  const handleSend = async (textToSend = inputVal) => {
     const text = textToSend.trim();
-    if (!text) return;
+    if (!text || isTyping) return;
 
     const userTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const userMsg = {
@@ -78,8 +81,28 @@ export default function LostFoundChatbot({ visible = true, onNavigate }) {
     setInputVal('');
     setIsTyping(true);
 
-    // Simulate realistic AI generation response (~400ms delay)
-    setTimeout(() => {
+    try {
+      const res = await api.chat.send(text, user?.communityId);
+      const payload = res?.data || res;
+      const botTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      let action = null;
+      if (Array.isArray(payload?.matchedReports) && payload.matchedReports.length > 0) {
+        action = { label: 'Explore Campus Listings', view: 'browse' };
+      }
+
+      const botMsg = {
+        id: `bot-${Date.now()}`,
+        sender: 'bot',
+        text: payload?.reply || 'Here is the campus lost and found information for your request.',
+        action,
+        showQuickQueries: false,
+        time: botTime,
+      };
+
+      setMessages((prev) => [...prev, botMsg]);
+    } catch {
+      // Graceful offline/local fallback: answer using local campus knowledge base
       const matchResult = matchLostFoundQuery(text);
       const botTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -92,9 +115,10 @@ export default function LostFoundChatbot({ visible = true, onNavigate }) {
         time: botTime,
       };
 
-      setIsTyping(false);
       setMessages((prev) => [...prev, botMsg]);
-    }, 420);
+    } finally {
+      setIsTyping(false);
+    }
   };
 
   const handleQuickClick = (queryLabel) => {
@@ -227,6 +251,12 @@ export default function LostFoundChatbot({ visible = true, onNavigate }) {
             <div ref={messagesEndRef} />
           </div>
 
+          {/* Privacy Notice Banner */}
+          <div className="emilap-chat-privacy-notice" role="note" aria-label="Privacy notice">
+            <ShieldAlert size={12} className="text-[#C68B59] shrink-0" />
+            <span>Public assistant only. Never submit passwords, card details, or private clues.</span>
+          </div>
+
           {/* Input Bar */}
           <form
             onSubmit={(e) => {
@@ -258,4 +288,3 @@ export default function LostFoundChatbot({ visible = true, onNavigate }) {
     </>
   );
 }
-

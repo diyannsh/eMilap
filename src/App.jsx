@@ -14,8 +14,9 @@ import { navigationItems } from './data/navigation.js';
 import AccountSettingsView from './components/account/AccountSettingsView.jsx';
 import LostFoundChatbot from './components/chat/LostFoundChatbot.jsx';
 import { getRouteUrl, parseCurrentRoute } from './lib/routes.js';
+import { AuthProvider } from './context/AuthContext.jsx';
 
-export default function App() {
+function AppContent() {
   const initialRoute = parseCurrentRoute();
   const [activeView, setActiveView] = useState(() => initialRoute.view);
   const [routeParams, setRouteParams] = useState(() => initialRoute.params);
@@ -163,5 +164,13 @@ export default function App() {
         aria-hidden="true"
       />
     </AppShell>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }

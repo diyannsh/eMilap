@@ -34,4 +34,3 @@ This folder stores unused, experimental, and legacy components moved out of `src
   * GSAP ScrollTrigger hook that scales, tilts, and adjusts brightness/saturation of a hero flower artwork as the page scrolls.
 * **`useLenis.js`**:
   * Reusable React hook for binding Lenis smooth scrolling to a container ref with reduced-motion support.
-

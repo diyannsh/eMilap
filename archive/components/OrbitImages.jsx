@@ -1,4 +1,4 @@
-﻿
+
 // Component created by Dominik Koch
 // https://x.com/dominikkoch
 
@@ -842,5 +842,3 @@ export default function OrbitImages({
     </div>
   );
 }
-
-

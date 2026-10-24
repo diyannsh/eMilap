@@ -1,4 +1,4 @@
-# eMilap
+# e-Milap
 
 Community lost and found interface built with React and Vite.
 The GridScan room background spans the app, and pointer clicks create a ripple effect.

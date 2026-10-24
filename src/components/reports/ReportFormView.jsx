@@ -1,19 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
-import { Camera, Check, CheckCircle2, ImagePlus, Share2, Sparkles, Trash2, Upload } from 'lucide-react';
+import { Camera, Check, CheckCircle2, ImagePlus, LogIn, Share2, Sparkles, Trash2, Upload } from 'lucide-react';
 import FloatingPanel from '../ui/FloatingPanel.jsx';
 import { Eye, Lock, MapPin } from '../../lib/icons.js';
 import { CAMPUS_ZONES, ITEM_CATEGORIES, mockStore } from '../../data/mockStore.js';
 import { copyShareLink } from '../../lib/routes.js';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { api } from '../../lib/api.js';
 
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
 
 export default function ReportFormView({ type, onNavigate }) {
+  const { user } = useAuth();
   const isLost = type === 'lost';
 
   // Form State
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('Electronics');
   const [color, setColor] = useState('');
+  const [brand, setBrand] = useState('');
   const [locationZone, setLocationZone] = useState('Main Library');
   const [spotDetail, setSpotDetail] = useState('');
   const [dateTime, setDateTime] = useState('Today, recent');
@@ -30,19 +34,6 @@ export default function ReportFormView({ type, onNavigate }) {
   const [submittedItem, setSubmittedItem] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [copiedShare, setCopiedShare] = useState(false);
-
-  const handleShareForm = async () => {
-    await copyShareLink(isLost ? 'report_lost' : 'report_found');
-    setCopiedShare(true);
-    setTimeout(() => setCopiedShare(false), 2200);
-  };
-
-  const handleCopySubmittedLink = async () => {
-    if (!submittedItem) return;
-    await copyShareLink('browse', { itemId: submittedItem.id });
-    setCopiedShare(true);
-    setTimeout(() => setCopiedShare(false), 2200);
-  };
 
   const galleryInputRef = useRef(null);
   const cameraInputRef = useRef(null);
@@ -75,23 +66,88 @@ export default function ReportFormView({ type, onNavigate }) {
     if (cameraInputRef.current) cameraInputRef.current.value = '';
   };
 
-  const handleSubmit = (e) => {
+  const handleShareForm = async () => {
+    await copyShareLink(isLost ? 'report_lost' : 'report_found');
+    setCopiedShare(true);
+    setTimeout(() => setCopiedShare(false), 2200);
+  };
+
+  const handleCopySubmittedLink = async () => {
+    if (!submittedItem) return;
+    await copyShareLink('browse', { itemId: submittedItem.id });
+    setCopiedShare(true);
+    setTimeout(() => setCopiedShare(false), 2200);
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setFormError('');
 
-    if (!title.trim()) {
-      setFormError('Please enter an item title or name.');
+    if (!title.trim() || title.trim().length < 2) {
+      setFormError('Please enter an item title of at least 2 characters.');
       return;
     }
-    if (!description.trim()) {
-      setFormError('Please provide a brief visible description of the item.');
+    if (!description.trim() || description.trim().length < 5) {
+      setFormError('Please provide a visible description of at least 5 characters.');
       return;
     }
 
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      const created = mockStore.addItem({
+    try {
+      let createdBackendItem = null;
+
+      // If user is logged in, submit to backend API first
+      if (user) {
+        let imageObjectKeys = [];
+        if (image) {
+          try {
+            const uploadRes = await api.uploads.uploadReportImage(image);
+            if (uploadRes?.data?.objectKey) {
+              imageObjectKeys.push(uploadRes.data.objectKey);
+            }
+          } catch (uploadErr) {
+            console.warn('Image upload failed, continuing with report submission:', uploadErr);
+          }
+        }
+
+        const reportPayload = {
+          reportType: isLost ? 'LOST' : 'FOUND',
+          title: title.trim(),
+          publicDescription: description.trim(),
+          category: category.trim(),
+          color: color.trim() || undefined,
+          brand: brand.trim() || undefined,
+          approximateLocation: spotDetail ? `${locationZone} - ${spotDetail.trim()}` : locationZone,
+          privateDetails: privateClue.trim() || undefined,
+          imageObjectKeys,
+        };
+
+        const res = await api.reports.create(reportPayload);
+        createdBackendItem = res?.data;
+      }
+
+      // Add to local mockStore for immediate UI responsiveness
+      const localItem = mockStore.addItem({
+        id: createdBackendItem?.id,
+        title: title.trim(),
+        category,
+        color: color.trim() || 'Unspecified',
+        location: locationZone,
+        spot: spotDetail.trim() || 'General campus area',
+        date: dateTime,
+        description: description.trim(),
+        privateClue: privateClue.trim() || 'None provided',
+        status: isLost ? 'LOST' : 'FOUND',
+        contact: user ? `${user.displayName || user.email}` : isLost ? 'Student Reporter' : `${locationZone} Campus Desk`,
+        isSample: false,
+      });
+
+      setSubmittedItem(createdBackendItem || localItem);
+    } catch (err) {
+      console.warn('Backend submission failed, saving to local store:', err);
+      // Fallback to local store
+      const localItem = mockStore.addItem({
         title: title.trim(),
         category,
         color: color.trim() || 'Unspecified',
@@ -104,15 +160,16 @@ export default function ReportFormView({ type, onNavigate }) {
         contact: isLost ? 'Student Reporter' : `${locationZone} Campus Desk`,
         isSample: false,
       });
-
+      setSubmittedItem(localItem);
+    } finally {
       setIsSubmitting(false);
-      setSubmittedItem(created);
-    }, 450);
+    }
   };
 
   const handleResetForm = () => {
     setTitle('');
     setColor('');
+    setBrand('');
     setSpotDetail('');
     setDescription('');
     setPrivateClue('');
@@ -133,7 +190,7 @@ export default function ReportFormView({ type, onNavigate }) {
 
             <div className="space-y-2">
               <span className="text-xs uppercase tracking-wider font-bold text-[#E6E0F0]">
-                {submittedItem.status} REPORT CONFIRMED
+                {submittedItem.status || (isLost ? 'LOST' : 'FOUND')} REPORT CONFIRMED
               </span>
               <h3 className="text-2xl font-bold text-[#FAF9F8]">{submittedItem.title}</h3>
               <p className="text-sm text-[#E5E4E2]/80 max-w-md mx-auto leading-relaxed">
@@ -145,15 +202,17 @@ export default function ReportFormView({ type, onNavigate }) {
             <div className="bg-[#1D110C] p-4 rounded-xl border border-[#6F4E37]/45 text-left text-xs space-y-2 max-w-md mx-auto">
               <div className="flex justify-between">
                 <span className="text-[#E5E4E2]/60">Reference ID:</span>
-                <span className="text-[#FAF9F8] font-mono font-bold">#EM-{submittedItem.id.slice(-6)}</span>
+                <span className="text-[#FAF9F8] font-mono font-bold">
+                  #EM-{String(submittedItem.id || 'SUBMITTED').slice(-6)}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-[#E5E4E2]/60">Location Zone:</span>
-                <span className="text-[#FAF9F8] font-semibold">{submittedItem.location}</span>
+                <span className="text-[#FAF9F8] font-semibold">{submittedItem.location || locationZone}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-[#E5E4E2]/60">Category:</span>
-                <span className="text-[#FAF9F8] font-semibold">{submittedItem.category}</span>
+                <span className="text-[#FAF9F8] font-semibold">{submittedItem.category || category}</span>
               </div>
             </div>
 
@@ -226,103 +285,94 @@ export default function ReportFormView({ type, onNavigate }) {
         </button>
       </div>
       <FloatingPanel title={`Report ${isLost ? 'Lost' : 'Found'} Item`}>
-        <form className="space-y-6" onSubmit={handleSubmit}>
-          {formError && (
-            <div className="p-3 bg-red-950/60 border border-red-500/50 rounded-xl text-xs text-red-200" role="alert">
-              {formError}
-            </div>
-          )}
+        {!user && (
+          <div className="mb-6 rounded-xl border border-[#6F4E37]/50 bg-[#1A0F0A]/90 p-4 text-sm text-[#E5E4E2]">
+            <p className="font-semibold text-[#E6E0F0] flex items-center gap-2">
+              <LogIn size={16} /> Campus Sign-In Recommended
+            </p>
+            <p className="mt-1 text-xs text-[#E5E4E2]/70">
+              You can submit reports locally now, or sign in via the header to sync your report across campus databases and receive automated match notifications.
+            </p>
+          </div>
+        )}
 
+        {formError && (
+          <div className="mb-6 rounded-xl border border-red-500/40 bg-red-950/40 p-4 text-sm text-red-300" role="alert">
+            <p className="font-semibold">Submission Notice</p>
+            <p className="mt-1 text-xs">{formError}</p>
+          </div>
+        )}
+
+        <form className="space-y-6" onSubmit={handleSubmit}>
           {/* ── Photo Upload Section ── */}
-          <section aria-label="Item photo" className="space-y-2">
-            <div
-              className={`overflow-hidden rounded-xl border ${
-                imageError ? 'border-red-400/70' : 'border-[#6F4E37]/50'
-              } bg-[#160D0A]/70`}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => {
-                event.preventDefault();
-                selectImage(event.dataTransfer.files?.[0]);
-              }}
-            >
-              {previewUrl ? (
-                <div className="relative">
-                  <img
-                    src={previewUrl}
-                    alt={`Selected photo for ${isLost ? 'lost' : 'found'} item report`}
-                    className="h-48 w-full object-cover sm:h-60"
-                  />
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#6F4E37]/50 bg-[#160D0A]/95 px-4 py-3">
-                    <span className="min-w-0 truncate text-sm text-[#FAF9F8]">{image?.name}</span>
-                    <div className="flex shrink-0 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => galleryInputRef.current?.click()}
-                        className="rounded-lg border border-[#6F4E37]/60 px-3 py-2 text-xs font-medium text-[#E5E4E2] transition hover:border-[#E6E0F0]/60 hover:text-[#FAF9F8]"
-                      >
-                        Replace photo
-                      </button>
-                      <button
-                        type="button"
-                        onClick={clearImage}
-                        aria-label="Remove selected photo"
-                        className="rounded-lg border border-[#6F4E37]/60 p-2 text-[#E5E4E2] transition hover:border-red-400/60 hover:text-red-300"
-                      >
-                        <Trash2 size={16} aria-hidden="true" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex min-h-48 flex-col items-center justify-center px-5 py-7 text-center sm:min-h-52">
-                  <span className="mb-3 grid h-12 w-12 place-items-center rounded-full border border-[#C68B59]/40 bg-[#C68B59]/15 text-[#C68B59]">
-                    <ImagePlus size={22} aria-hidden="true" />
-                  </span>
-                  <p className="font-semibold text-[#FAF9F8]">
-                    Add a photo of the {isLost ? 'item you lost' : 'item you found'}
-                  </p>
-                  <p className="mt-1 text-sm text-[#E5E4E2]/75">
-                    Choose an image, take a photo, or drag one here. JPG, PNG, or other image files up to 10 MB.
-                  </p>
-                  <div className="mt-4 flex flex-wrap justify-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => galleryInputRef.current?.click()}
-                      className="inline-flex items-center gap-2 rounded-lg bg-[#C68B59] px-4 py-2.5 text-sm font-semibold text-[#160D0A] transition hover:bg-[#D99A62]"
-                    >
-                      <Upload size={16} aria-hidden="true" /> Choose from device
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => cameraInputRef.current?.click()}
-                      className="inline-flex items-center gap-2 rounded-lg border border-[#6F4E37]/60 px-4 py-2.5 text-sm font-medium text-[#E5E4E2] transition hover:border-[#E6E0F0]/60 hover:text-[#FAF9F8]"
-                    >
-                      <Camera size={16} aria-hidden="true" /> Take a photo
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+          <section className="space-y-3">
+            <label className="block text-sm font-medium text-[#E5E4E2]">
+              Item Photo (Optional)
+            </label>
+
             <input
               ref={galleryInputRef}
-              className="sr-only"
               type="file"
-              name="itemImage"
               accept="image/*"
-              aria-label="Choose an item photo from your device"
-              onChange={(event) => selectImage(event.target.files?.[0])}
+              className="hidden"
+              onChange={(e) => selectImage(e.target.files?.[0])}
             />
+
             <input
               ref={cameraInputRef}
-              className="sr-only"
               type="file"
               accept="image/*"
               capture="environment"
-              aria-label="Take a photo of the item"
-              onChange={(event) => selectImage(event.target.files?.[0])}
+              className="hidden"
+              onChange={(e) => selectImage(e.target.files?.[0])}
             />
+
+            {!previewUrl ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => galleryInputRef.current?.click()}
+                  className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[#6F4E37]/70 bg-[#160D0A]/70 p-6 text-[#E5E4E2] transition hover:border-[#E6E0F0] hover:bg-[#20130E]"
+                >
+                  <ImagePlus size={24} className="text-[#C68B59]" />
+                  <span className="text-xs font-semibold">Upload Photo</span>
+                  <span className="text-[10px] text-[#E5E4E2]/50">PNG, JPG up to 10 MB</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[#6F4E37]/70 bg-[#160D0A]/70 p-6 text-[#E5E4E2] transition hover:border-[#E6E0F0] hover:bg-[#20130E]"
+                >
+                  <Camera size={24} className="text-[#C68B59]" />
+                  <span className="text-xs font-semibold">Take Photo</span>
+                  <span className="text-[10px] text-[#E5E4E2]/50">Direct from camera</span>
+                </button>
+              </div>
+            ) : (
+              <div className="relative overflow-hidden rounded-xl border border-[#6F4E37]/60 bg-[#160D0A]/80 p-3">
+                <div className="relative mx-auto aspect-video max-h-56 overflow-hidden rounded-lg bg-black/40">
+                  <img
+                    src={previewUrl}
+                    alt="Uploaded item preview"
+                    className="h-full w-full object-contain"
+                  />
+                </div>
+                <div className="mt-3 flex items-center justify-between text-xs text-[#E5E4E2]/70">
+                  <span>Photo attached ({((image?.size || 0) / (1024 * 1024)).toFixed(2)} MB)</span>
+                  <button
+                    type="button"
+                    onClick={clearImage}
+                    className="flex items-center gap-1 text-red-400 hover:text-red-300 font-medium transition"
+                  >
+                    <Trash2 size={14} /> Remove photo
+                  </button>
+                </div>
+              </div>
+            )}
+
             {imageError && (
-              <p className="text-sm text-red-300" role="alert">
+              <p className="text-xs text-red-400 font-medium" role="alert">
                 {imageError}
               </p>
             )}
@@ -373,6 +423,17 @@ export default function ReportFormView({ type, onNavigate }) {
                 />
               </div>
 
+              <div>
+                <label className="mb-1 block text-sm font-medium text-[#E5E4E2]">Brand / Manufacturer</label>
+                <input
+                  type="text"
+                  value={brand}
+                  onChange={(e) => setBrand(e.target.value)}
+                  placeholder="Example: Apple, Hydro Flask, Nike"
+                  className="w-full rounded-lg border border-[#6F4E37]/50 bg-[#160D0A]/70 p-3 text-[#FAF9F8] placeholder-[#E5E4E2]/40 transition focus:border-[#E6E0F0] focus:outline-none focus:ring-1 focus:ring-[#E6E0F0]/40"
+                />
+              </div>
+
               {/* Campus Location Zone Dropdown */}
               <div>
                 <label className="mb-1 block text-sm font-medium text-[#E5E4E2] flex items-center gap-1.5">
@@ -391,13 +452,13 @@ export default function ReportFormView({ type, onNavigate }) {
                 </select>
               </div>
 
-              <div>
+              <div className="sm:col-span-2">
                 <label className="mb-1 block text-sm font-medium text-[#E5E4E2]">Specific Spot / Room</label>
                 <input
                   type="text"
                   value={spotDetail}
                   onChange={(e) => setSpotDetail(e.target.value)}
-                  placeholder="e.g. 2nd Fl study desk, Cafeteria booth"
+                  placeholder="e.g. 2nd Fl study desk, Cafeteria booth, Lab 3"
                   className="w-full rounded-lg border border-[#6F4E37]/50 bg-[#160D0A]/70 p-3 text-[#FAF9F8] placeholder-[#E5E4E2]/40 transition focus:border-[#E6E0F0] focus:outline-none focus:ring-1 focus:ring-[#E6E0F0]/40"
                 />
               </div>
@@ -419,7 +480,7 @@ export default function ReportFormView({ type, onNavigate }) {
                   required
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Describe its exterior appearance, brand, stickers, visible condition, or accessories."
+                  placeholder="Describe its exterior appearance, stickers, visible condition, or accessories."
                   className="h-24 w-full rounded-lg border border-[#6F4E37]/50 bg-[#160D0A]/70 p-3 text-[#FAF9F8] placeholder-[#E5E4E2]/40 transition focus:border-[#E6E0F0] focus:outline-none focus:ring-1 focus:ring-[#E6E0F0]/40"
                 />
               </div>
