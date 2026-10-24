@@ -178,15 +178,7 @@ export default function AccountAccess({ initialMode = 'login', onClose }) {
           </button>
         </form>
 
-        {mode !== 'forgot' && (
-          <>
-            <div className="account-access-divider"><span>or</span></div>
-            <button type="button" className="account-access-google" onClick={() => { setIsError(true); setMessage('Google Sign-In is unsupported in this environment. Please sign in using your campus email and password.'); }}>
-              <span className="account-access-google-mark" aria-hidden="true">G</span>
-              Continue with Google
-            </button>
-          </>
-        )}
+
 
         {message && (
           <p className={`account-access-message ${isError ? 'text-red-400 bg-red-950/40 border border-red-500/30 rounded-lg p-2.5 mt-3 text-xs' : 'text-signal-300'}`} role="status">

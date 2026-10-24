@@ -284,7 +284,8 @@ export class ChatService {
       `4. Never ask for or expose private clues, passwords, or personal credentials.\n` +
       `Context Reports: ${JSON.stringify(publicContext)}`;
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
+    const model = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`;
     const payload = {
       contents: [
         { role: "user", parts: [{ text: `${systemPrompt}\n\nUser Question: ${userMessage}` }] },

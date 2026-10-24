@@ -1,19 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
 import { LogIn, LogOut, Settings2, ShieldCheck, User, UserPlus } from 'lucide-react';
-import Topography from '../canvas/Topography.jsx';
+import MochaFlowerBackground from '../canvas/MochaFlowerBackground.jsx';
 import GlassSurface from '../ui/GlassSurface.jsx';
 import AccountAccess from '../account/AccountAccess.jsx';
-import ChatbotWidget from '../chat/ChatbotWidget.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { MapPin } from '../../lib/icons.js';
 import './AppShell.css';
 
 export default function AppShell({ activeView, navigationItems, onNavigate, transitioning = false, children }) {
-  const { user, logout, unreadCount } = useAuth();
+  const { user, logout, unreadCount = 0 } = useAuth();
   const mainRef = useRef(null);
   const accountMenuRef = useRef(null);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [authMode, setAuthMode] = useState(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const activeLabel = navigationItems.find((item) => item.id === activeView)?.label ?? 'Sections';
 
   const openAuth = (mode) => {
@@ -29,6 +29,18 @@ export default function AppShell({ activeView, navigationItems, onNavigate, tran
       setAuthMode(null);
     }
   };
+
+  // Lock body scroll when mobile menu is open
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [mobileMenuOpen]);
 
   useEffect(() => {
     if (!accountMenuOpen) return undefined;
@@ -47,51 +59,42 @@ export default function AppShell({ activeView, navigationItems, onNavigate, tran
     return () => window.removeEventListener('popstate', handleAuthHistory);
   }, []);
 
+  const handleMobileNav = (id) => {
+    setMobileMenuOpen(false);
+    onNavigate(id);
+  };
+
+  // Sections only (no dashboard item) for mobile menu listing
+  const sectionItems = navigationItems.filter((item) => item.id !== 'dashboard');
+
   return (
-    <div className="relative min-h-screen w-full bg-cocoa-950 font-sans text-platinum-500" style={{ backgroundColor: '#1E1310' }}>
+    <div className="relative min-h-screen w-full bg-[#0E0805] font-sans text-platinum-500" style={{ backgroundColor: '#0E0805' }}>
       <main
         ref={mainRef}
         className="app-main relative flex min-h-screen w-full flex-col"
       >
-        <Topography
-          className="pointer-events-none fixed inset-0 z-0"
-          style={{ position: 'fixed', inset: 0, height: '100vh' }}
-          color="#C68B59"
-          lineCount={26}
-          lineWidth={1.3}
-          elevation={1.15}
-          foreground={0.2}
-          tilt={32}
-          speed={0.16}
-          direction="forward"
-          morph={0.32}
-          glow={0.58}
-          depthOfField={0.32}
-          fog={0.42}
-          hoverEffect="lift"
-          mouseStrength={0.68}
-          mouseRadius={1.4}
-          trail={0.22}
-          parallax={0.32}
-          markers="dots"
-          clickEffect="none"
-        />
+        <MochaFlowerBackground activeView={activeView} />
 
-        <header className="fixed inset-x-3 top-3 z-40 mx-auto flex w-[calc(100%-1.5rem)] max-w-[1400px] flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-[28px] border border-white/10 bg-[#1d1c1f]/75 px-3 py-2 shadow-lg shadow-black/10 backdrop-blur-xl xl:flex-nowrap xl:px-5">
+        {/* ─────────────────────────────────────────────────────────
+            DESKTOP HEADER (xl and above)
+        ───────────────────────────────────────────────────────── */}
+        <header className="fixed inset-x-3 top-3 z-40 mx-auto hidden w-[calc(100%-1.5rem)] max-w-[1400px] xl:flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-[28px] border border-[#E5E4E2]/15 bg-[#231713]/85 px-5 py-2 shadow-lg shadow-black/10 backdrop-blur-xl flex-nowrap">
+          {/* Logo */}
           <button
             type="button"
             onClick={() => onNavigate('dashboard')}
-            className="flex items-center gap-3 rounded-xl text-left transition hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lavender-300"
+            className="flex items-center gap-3 rounded-xl text-left transition hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#E6E0F0]"
             aria-label="Go to e-Milap sections"
           >
-            <MapPin className="text-lavender-300" size={25} />
+            <MapPin className="text-[#E6E0F0]" size={25} />
             <span>
-              <span className="block text-xl font-bold leading-none text-platinum-400">e-Milap</span>
-              <span className="mt-1 block text-[10px] font-semibold uppercase tracking-[0.18em] text-platinum-500/65">Campus Lost &amp; Found</span>
+              <span className="block text-xl font-bold leading-none text-[#FAF9F8]">e-Milap</span>
+              <span className="mt-1 block text-[10px] font-semibold uppercase tracking-[0.18em] text-[#E5E4E2]/70">Campus Lost &amp; Found</span>
             </span>
           </button>
 
-          <nav aria-label="Main navigation" className="order-3 flex w-full items-center justify-center gap-0.5 xl:order-none xl:w-auto xl:gap-2">
+          {/* Navigation icons */}
+          <nav aria-label="Main navigation" className="flex items-center gap-2">
             {navigationItems.map((item) => {
               const Icon = item.icon;
               const isAccount = item.id === 'settings';
@@ -136,15 +139,16 @@ export default function AppShell({ activeView, navigationItems, onNavigate, tran
                       )}
                     </button>
                   </GlassSurface>
+
                   {isAccount && accountMenuOpen && (
                     <div className="account-menu" role="menu" aria-label="Account menu">
                       {user ? (
                         <>
-                          <div className="px-3 py-2 border-b border-mocha-700/60">
-                            <p className="text-xs font-semibold text-platinum-400 truncate">{user.displayName}</p>
-                            <p className="text-[10px] text-platinum-500/75 truncate">{user.email}</p>
+                          <div className="px-3 py-2 border-b border-[#6F4E37]/40 mb-1">
+                            <p className="text-xs font-semibold text-[#FAF9F8] truncate">{user.displayName || user.email}</p>
+                            <p className="text-[10px] text-[#E5E4E2]/70 truncate">{user.email}</p>
                             {user.role && user.role !== 'MEMBER' && (
-                              <span className="mt-1 inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-signal-400 bg-signal-500/10 px-1.5 py-0.5 rounded">
+                              <span className="mt-1 inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-[#C68B59] bg-[#6F4E37]/30 px-1.5 py-0.5 rounded border border-[#6F4E37]/50">
                                 <ShieldCheck size={10} /> {user.role}
                               </span>
                             )}
@@ -183,32 +187,154 @@ export default function AppShell({ activeView, navigationItems, onNavigate, tran
             })}
           </nav>
 
+          {/* Action pill: Back button if in section */}
           {(activeView !== 'dashboard' || transitioning) && (
             <button
               type="button"
               onClick={() => onNavigate('dashboard')}
-              className="section-nav-back rounded-full border border-mocha-700 bg-mocha-900/80 px-4 py-2 text-sm font-medium text-platinum-400 backdrop-blur transition-colors hover:border-lavender-500/60 hover:bg-mocha-800"
+              className="rounded-full border border-[#6F4E37] bg-[#231713]/80 px-4 py-2 text-sm font-medium text-[#FAF9F8] backdrop-blur transition-colors hover:border-[#E6E0F0]/60 hover:bg-[#341F18]"
             >
               ← All sections
               <span className="sr-only"> (current: {activeLabel})</span>
             </button>
           )}
 
-          <div className="flex items-center gap-2 rounded-full border border-mocha-700 bg-mocha-900/80 px-4 py-2 text-xs font-medium text-platinum-400 backdrop-blur">
+          {/* Campus community indicator */}
+          <div className="flex items-center gap-2 rounded-full border border-[#6F4E37]/60 bg-[#231713]/80 px-4 py-2 text-xs font-medium text-[#FAF9F8] backdrop-blur">
             <span className="h-2 w-2 animate-pulse rounded-full bg-signal-400" />
             {user?.communityName || 'Campus community'}
           </div>
         </header>
 
+        {/* ─────────────────────────────────────────────────────────
+            MOBILE HEADER (below xl)
+        ───────────────────────────────────────────────────────── */}
+        <header className="fixed inset-x-3 top-3 z-40 mx-auto flex w-[calc(100%-1.5rem)] items-center justify-between rounded-[22px] border border-[#E5E4E2]/15 bg-[#231713]/90 px-4 py-3 shadow-lg shadow-black/10 backdrop-blur-xl xl:hidden">
+          {/* Logo */}
+          <button
+            type="button"
+            onClick={() => { setMobileMenuOpen(false); onNavigate('dashboard'); }}
+            className="flex items-center gap-2.5 rounded-xl text-left transition hover:opacity-80"
+            aria-label="Go home"
+          >
+            <MapPin className="text-[#E6E0F0]" size={22} />
+            <span>
+              <span className="block text-lg font-bold leading-none text-[#FAF9F8]">e-Milap</span>
+              <span className="block text-[9px] font-semibold uppercase tracking-[0.18em] text-[#E5E4E2]/65">Campus Lost &amp; Found</span>
+            </span>
+          </button>
+
+          {/* Right side: back button (in section) + MENU toggle */}
+          <div className="flex items-center gap-2">
+            {(activeView !== 'dashboard' || transitioning) && !mobileMenuOpen && (
+              <button
+                type="button"
+                onClick={() => onNavigate('dashboard')}
+                className="rounded-full border border-[#6F4E37]/50 bg-[#2C1C16]/85 px-3 py-1.5 text-xs font-semibold text-[#E5E4E2] backdrop-blur"
+              >
+                ← Back
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen((o) => !o)}
+              className="mobile-menu-toggle"
+              aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+              aria-expanded={mobileMenuOpen}
+            >
+              <span className="mobile-menu-toggle-text">{mobileMenuOpen ? 'CLOSE' : 'MENU'}</span>
+              <span className="mobile-menu-toggle-lines" aria-hidden="true">
+                <span className={mobileMenuOpen ? 'line-1 open' : 'line-1'} />
+                <span className={mobileMenuOpen ? 'line-2 open' : 'line-2'} />
+              </span>
+            </button>
+          </div>
+        </header>
+
+        {/* ─────────────────────────────────────────────────────────
+            MOBILE FULL-SCREEN MENU OVERLAY
+        ───────────────────────────────────────────────────────── */}
+        <div
+          className={`mobile-nav-overlay xl:hidden${mobileMenuOpen ? ' is-open' : ''}`}
+          aria-hidden={!mobileMenuOpen}
+        >
+          <nav className="mobile-nav-list" aria-label="Mobile navigation">
+            {sectionItems.map((item, i) => {
+              const isActive = activeView === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`mobile-nav-item${isActive ? ' is-active' : ''}`}
+                  onClick={() => handleMobileNav(item.id)}
+                  style={{ transitionDelay: mobileMenuOpen ? `${i * 55}ms` : '0ms' }}
+                >
+                  <span className="mobile-nav-num">{String(i + 1).padStart(2, '0')}</span>
+                  <span className="mobile-nav-label inline-flex items-center gap-2">
+                    {item.label}
+                    {item.id === 'notifications' && unreadCount > 0 && (
+                      <span className="px-2 py-0.5 text-[10px] bg-[#E6E0F0]/25 text-[#E6E0F0] border border-[#E6E0F0]/40 rounded-full font-bold">
+                        {unreadCount} new
+                      </span>
+                    )}
+                  </span>
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* Quick Account Actions inside Mobile Overlay */}
+          <div className="pt-4 border-t border-[#6F4E37]/30 flex flex-col gap-2">
+            {user ? (
+              <div className="flex items-center justify-between text-xs py-2 px-1 text-[#E5E4E2]">
+                <span className="truncate">{user.displayName || user.email}</span>
+                <button
+                  type="button"
+                  onClick={() => { setMobileMenuOpen(false); logout(); }}
+                  className="text-signal-400 font-semibold px-2 py-1 rounded bg-[#6F4E37]/20 border border-[#6F4E37]/40"
+                >
+                  Sign out
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setMobileMenuOpen(false); openAuth('login'); }}
+                  className="flex-1 py-2 rounded-xl bg-[#6F4E37] text-xs font-semibold text-[#FAF9F8] text-center"
+                >
+                  Sign in
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setMobileMenuOpen(false); openAuth('signup'); }}
+                  className="flex-1 py-2 rounded-xl bg-[#2C1C16] border border-[#6F4E37]/60 text-xs font-semibold text-[#FAF9F8] text-center"
+                >
+                  Create account
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Footer strip */}
+          <div className="mobile-nav-footer mt-4">
+            <div className="flex items-center gap-2">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-signal-400" />
+              <span className="text-xs font-medium text-[#E5E4E2]/70 uppercase tracking-widest">
+                {user?.communityName || 'Campus community'}
+              </span>
+            </div>
+          </div>
+        </div>
+
         {authMode && <AccountAccess initialMode={authMode} onClose={closeAuth} />}
 
-        <div className="h-[144px] shrink-0 xl:h-20" aria-hidden="true" />
+        {/* Header spacer */}
+        <div className="h-[68px] shrink-0 xl:h-20" aria-hidden="true" />
 
         <div data-lenis-content className="relative z-10 flex w-full flex-1 flex-col">
           {children}
         </div>
-
-        <ChatbotWidget onNavigate={onNavigate} />
       </main>
     </div>
   );

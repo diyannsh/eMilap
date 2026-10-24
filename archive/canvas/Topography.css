@@ -1,0 +1,53 @@
+﻿.topography-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  isolation: isolate;
+  background: radial-gradient(ellipse at 52% 76%, #2b1b17 0%, #211511 48%, #1b110e 100%);
+}
+
+.topography-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.topography-container::before,
+.topography-container::after {
+  position: absolute;
+  z-index: 1;
+  inset: -18%;
+  content: '';
+  pointer-events: none;
+  will-change: transform;
+}
+
+.topography-container::before {
+  background: radial-gradient(ellipse at 30% 72%, rgba(210, 125, 45, 0.14), transparent 42%);
+  mix-blend-mode: screen;
+  animation: topography-warm-drift 26s ease-in-out infinite alternate;
+}
+
+.topography-container::after {
+  background: radial-gradient(ellipse at 76% 64%, rgba(245, 166, 35, 0.1), transparent 38%);
+  mix-blend-mode: screen;
+  animation: topography-green-drift 29s ease-in-out infinite alternate;
+}
+
+@keyframes topography-warm-drift {
+  from { transform: translate3d(-1.5%, 1%, 0) scale(1); }
+  to { transform: translate3d(2%, -1.5%, 0) scale(1.06); }
+}
+
+@keyframes topography-green-drift {
+  from { transform: translate3d(1.5%, -1%, 0) scale(1.02); }
+  to { transform: translate3d(-2%, 1.5%, 0) scale(1.08); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .topography-container::before,
+  .topography-container::after {
+    animation: none;
+  }
+}
