@@ -25,7 +25,9 @@
     "db:up": "docker compose -f infra/compose.yaml up -d postgres",
     "db:down": "docker compose -f infra/compose.yaml down",
     "db:migrate": "node database/scripts/migrate.mjs",
-    "db:verify": "node database/scripts/verify-db.mjs"
+    "db:verify": "node database/scripts/verify-db.mjs",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "build:web": "vite build"
   },
   "dependencies": {
     "@react-three/drei": "^9.122.0",
