@@ -7,11 +7,28 @@
   position: fixed;
   z-index: 30;
   inset: 0;
+  isolation: isolate;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding-top: 68px;
-  background: #0E0805;
+  background: transparent;
+}
+
+.section-view-banner {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  left: 0;
+  display: block;
+  width: 100%;
+  height: min(52vh, 520px);
+  min-height: 300px;
+  object-fit: cover;
+  object-position: center 36%;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 30%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 30%, transparent 100%);
 }
 
 @media (min-width: 1280px) {
