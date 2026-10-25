@@ -16,6 +16,17 @@ import LostFoundChatbot from './components/chat/LostFoundChatbot.jsx';
 import { getRouteUrl, parseCurrentRoute } from './lib/routes.js';
 import { AuthProvider } from './context/AuthContext.jsx';
 
+const SECTION_BANNERS = {
+  report_lost: '/images/Report_lost.webp',
+  report_found: '/images/Report_found.webp',
+  browse: '/images/Campus_listings.webp',
+  matches: '/images/Possible_matches.webp',
+  claims: '/images/Ownership_claims.webp',
+  notifications: '/images/Updates.webp',
+  admin: '/images/Moderation.webp',
+  settings: '/images/Account-settings.webp',
+};
+
 function AppContent() {
   const initialRoute = parseCurrentRoute();
   const [activeView, setActiveView] = useState(() => initialRoute.view);
@@ -154,6 +165,18 @@ function AppContent() {
 
       {activeView !== 'dashboard' && (
         <div className="section-view-overlay" data-lenis-prevent>
+        {SECTION_BANNERS[activeView] && (
+          <img
+            className="section-view-banner"
+            src={SECTION_BANNERS[activeView]}
+            alt=""
+            aria-hidden="true"
+            onError={(event) => {
+              event.currentTarget.onerror = null;
+              event.currentTarget.src = SECTION_BANNERS[activeView].replace('.webp', '.jpg');
+            }}
+          />
+        )}
         <SectionPage title={sectionTitle} sectionIndex={Math.max(0, sectionIndex)}>
           {views[activeView] ?? <EmptyPlaceholder title={sectionTitle} />}
         </SectionPage>
