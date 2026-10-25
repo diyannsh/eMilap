@@ -401,4 +401,4 @@ Contributions to e-Milap are welcome. To contribute:
 
 ## License
 
-No formal license file is currently present in this repository. All rights reserved by the repository owner. If you intend to use this code commercially or redistribute it, please contact the repository maintainers.
+No formal license file is currently present in this repository. All rights reserved by the repository owner. If you intend to use this code commercially or redistribute it, please contact the repository maintainers
